@@ -13,10 +13,14 @@ initialize_renv.R
 *.RData
 
 #ignore source CLIF_ files 
-CLIF_*.parquet
-CLIF_*.csv
-CLIF_*.fst
+clif_*.parquet
+clif_*.csv
+clif_*.fst
 
 # ignore rendered pdf and html
 *.pdf
 *.html
+
+# ignore the venv
+.mobilization
+
