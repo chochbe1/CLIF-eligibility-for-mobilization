@@ -1,3 +1,5 @@
+import pandas as pd
+import numpy as np
 import json
 import os
 import duckdb
@@ -246,9 +248,6 @@ def remove_duplicates(df, columns, df_name):
         print(f"No duplicates found based on columns: {columns}.")
     
     return df_cleaned
-
-import pandas as pd
-import numpy as np
 
 def process_resp_support(df):
     """
