@@ -270,11 +270,11 @@ def process_resp_support(df):
     df['device_name'] = df['device_name'].str.lower()
     df['mode_name'] = df['mode_name'].str.lower()
     
-    # Fix out-of-range values
-    print("Fixing out-of-range values for 'fio2_set', 'peep_set', and 'resp_rate_set'...")
-    df['fio2_set'] = df['fio2_set'].where(df['fio2_set'].between(0.21, 1), np.nan)
-    df['peep_set'] = df['peep_set'].where(df['peep_set'].between(0, 50), np.nan)
-    df['resp_rate_set'] = df['resp_rate_set'].where(df['resp_rate_set'].between(0, 60), np.nan)
+    # # Fix out-of-range values
+    # print("Fixing out-of-range values for 'fio2_set', 'peep_set', and 'resp_rate_set'...")
+    # df['fio2_set'] = df['fio2_set'].where(df['fio2_set'].between(0.21, 1), np.nan)
+    # df['peep_set'] = df['peep_set'].where(df['peep_set'].between(0, 50), np.nan)
+    # df['resp_rate_set'] = df['resp_rate_set'].where(df['resp_rate_set'].between(0, 60), np.nan)
     
     # Create 'recorded_date' and 'recorded_hour'
     print('Creating recorded_date and recorded_hour...')

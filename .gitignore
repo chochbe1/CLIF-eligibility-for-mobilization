@@ -13,7 +13,7 @@ initialize_renv.R
 *.RData
 
 #ignore source CLIF_ files 
-clif_*.parquet
+*.parquet
 clif_*.csv
 clif_*.fst
 
