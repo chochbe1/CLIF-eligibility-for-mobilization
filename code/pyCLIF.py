@@ -3,7 +3,6 @@ import numpy as np
 import json
 import os
 import duckdb
-import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 

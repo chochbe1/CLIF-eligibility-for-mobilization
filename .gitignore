@@ -24,3 +24,6 @@ clif_*.fst
 # ignore the venv
 .mobilization
 
+# all files under intermediate folder
+output/intermediate/
+
