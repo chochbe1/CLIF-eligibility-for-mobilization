@@ -34,7 +34,9 @@ The study period is from March 1, 2020, to March 31, 2022. The cohort consists o
 
 ## Environment setup
 
-The environment setup code is provided in the `setup.sh` file. 
+The environment setup code is provided in the `setup.sh` file for macOS and `setup.bat` for Windows.
+
+**For macOS:**
 
 1. Make the script executable: 
 ```bash
@@ -46,7 +48,16 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-3. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook. 
+3. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
+
+**For Windows:**
+
+1. Run the script:
+```bat
+setup.bat
+```
+
+2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
 
 
 ## Criteria for Safe Therapy
