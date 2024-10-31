@@ -11,7 +11,7 @@ The following tables are required:
 1. **patient**: `patient_id`, `race_category`, `ethnicity_category`, `sex_category`
 2. **hospitalization**: `patient_id`, `hospitalization_id`, `admission_dttm`, `discharge_dttm`, `age_at_admission`
 3. **vitals**: `hospitalization_id`, `recorded_dttm`, `vital_category`, `vital_value`
-   - `vital_category` = 'heart_rate', 'resp_rate', 'sbp', 'dbp', 'map', 'resp_rate', 'spo2'
+   - `vital_category` = 'heart_rate', 'resp_rate', 'sbp', 'dbp', 'map', 'resp_rate', 'spo2', ''weight_kg', 'height_cm'
 4. **labs**: `hospitalization_id`, `lab_result_dttm`, `lab_category`, `lab_value`
    - `lab_category` = 'lactate'
 5. **medication_admin_continuous**: `hospitalization_id`, `admin_dttm`, `med_name`, `med_category`, `med_dose`, `med_dose_unit`
