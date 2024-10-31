@@ -26,4 +26,5 @@ clif_*.fst
 
 # all files under intermediate folder
 output/intermediate/
+output/final/
 

@@ -165,54 +165,33 @@ def generate_facetgrid_histograms(data, category_column, value_column):
 
     return g
 
-def qc_check(df, table_name, expected_columns, expected_categories=None):
+def map_race_column(df, race_column='race'):
     """
-    Perform QC checks on the dataframe.
+    Function to map race values to simplified categories.
 
-    Parameters:
-        df (pd.DataFrame): The dataframe to check.
-        table_name (str): The name of the table.
-        expected_columns (dict): Expected columns and their data types.
-        expected_categories (dict): Expected categories for categorical variables.
+    Args:
+    - df (pandas.DataFrame): Input DataFrame containing the race data.
+    - race_column (str): The name of the race column. Default is 'race'.
 
     Returns:
-        qc_report (dict): A report of the QC results.
+    - pandas.DataFrame: DataFrame with a new column 'race_new' containing the mapped race values.
     """
-    qc_report = {'table_name': table_name, 
-                 'missing_columns': [], 
-                 'wrong_dtypes': {}, 
-                 'missingness': {}, 
-                 'category_mismatches': {}}
+    # Define the mapping
+    race_mapping = {
+        'Black or African American': 'Black',
+        'White': 'White',
+        'Asian': 'Other',
+        'American Indian or Alaska Native': 'Other',
+        'Native Hawaiian or Other Pacific Islander': 'Other',
+        'Other': 'Other',
+        'Unknown': 'Other'
+    }
 
-    # Check for missing columns and data types
-    for col, expected_dtype in expected_columns.items():
-        if col not in df.columns:
-            qc_report['missing_columns'].append(col)
-        else:
-            actual_dtype = str(df[col].dtype)
-            if expected_dtype == 'varchar' and not pd.api.types.is_string_dtype(df[col]):
-                qc_report['wrong_dtypes'][col] = actual_dtype
-            elif expected_dtype == 'datetime' and not pd.api.types.is_datetime64_any_dtype(df[col]):
-                qc_report['wrong_dtypes'][col] = actual_dtype
-            elif expected_dtype == 'int' and not pd.api.types.is_integer_dtype(df[col]):
-                qc_report['wrong_dtypes'][col] = actual_dtype
+    # Apply the mapping to create a new 'race_new' column
+    df['race_new'] = df[race_column].map(race_mapping).fillna('Missing')
 
-    # Compute percentage missingness
-    for col in expected_columns.keys():
-        if col in df.columns:
-            missing_percentage = df[col].isna().mean() * 100
-            qc_report['missingness'][col] = missing_percentage
+    return df
 
-    # Check categories
-    if expected_categories:
-        for col, categories in expected_categories.items():
-            if col in df.columns:
-                unique_values = df[col].dropna().unique()
-                mismatches = set(unique_values) - set(categories)
-                if mismatches:
-                    qc_report['category_mismatches'][col] = list(mismatches)
-
-    return qc_report
 
 def remove_duplicates(df, columns, df_name):
     """
