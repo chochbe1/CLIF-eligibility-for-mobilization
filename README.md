@@ -60,62 +60,12 @@ setup.bat
 2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
 
 
-## Criteria for Safe Therapy
+## References
 
-### 1. Patel et al. Criteria
-The *Patel et al.* criteria define safe physiological ranges that must be met for mobilization:
-- **Mean arterial blood pressure (MAP):** 65-110 mm Hg
-- **Systolic blood pressure (SBP):** ≤ 200 mm Hg
-- **Heart rate:** 40-130 beats per minute
-- **Respiratory rate:** 5-40 breaths per minute
-- **Pulse oximetry (SpO2):** ≥ 88%
-
-### 2. TEAM Study Criteria
-The *TEAM Study* criteria focus on hemodynamic and respiratory stability:
-- **Heart rate:** ≤ 150 bpm
-- **Most recent lactate:** ≤ 4.0 mmol/L
-- **Noradrenaline infusion rate:**
-  - ≤ 0.2 mcg/kg/min, OR
-  - 0.1-0.2 mcg/kg/min (without an increase in the infusion rate of more than 25% in the last 6 hours)
-- **Respiratory stability:**
-  - FiO2: ≤ 0.6
-  - PEEP: ≤ 16 cm H2O
-- **Current respiratory rate:** ≤ 45 breaths per minute
-
-### 3. Consensus Criteria
-The Consensus Criteria categorize safety flags into Green, Yellow, and Red, providing a hierarchical assessment of patient stability:
-
-#### Green Criteria
-- **Respiratory:**
-  - SpO2 ≥ 90%
-  - Respiratory rate ≤ 30 breaths/min
-  - FiO2 ≤ 0.6
-  - PEEP ≤ 10 cm H2O
-- **Cardiovascular:**
-  - MAP ≥ 65 mm Hg with no or low support (Norepi < 0.1 μg/kg/min)
-  - Heart rate < 120 bpm
-  - Lactate < 4 mmol/L
-  - Heart rate > 40 bpm
-
-#### Yellow Criteria
-- **Respiratory:**
-  - SpO2 ≥ 90%
-  - FiO2 > 0.6
-  - Respiratory rate > 30 breaths/min
-  - PEEP > 10 cm H2O
-- **Cardiovascular:**
-  - MAP ≥ 65 mm Hg with moderate support (Norepi 0.1-0.3 μg/kg/min)
-  - Heart rate 120-150 bpm
-  - Shock with lactate > 4 mmol/L
-  - Heart rate > 40 bpm
-
-#### Red Criteria
-- **Respiratory:**
-  - SpO2 < 90%
-- **Cardiovascular:**
-  - MAP < 65 mm Hg despite support
-  - MAP ≥ 65 mm Hg but on high support (Norepi > 0.3 μg/kg/min)
-  - IV therapy for hypertensive emergency (SBP > 200 mm Hg or MAP > 110 mm Hg with specific medications)
-  - Heart rate > 150 bpm or < 40 bpm
+1. [Patel BK, Wolfe KS, Patel SB, Dugan KC, Esbrook CL, Pawlik AJ, Stulberg M, Kemple C, Teele M, Zeleny E, Hedeker D, Pohlman AS, Arora VM, Hall JB, Kress JP. Effect of early mobilisation on long-term cognitive impairment in critical illness in the USA: a randomised controlled trial. Lancet Respir Med. 2023 Jun;11(6):563-572. doi: 10.1016/S2213-2600(22)00489-1. Epub 2023 Jan 21. PMID: 36693400; PMCID: PMC10238598.](https://pubmed.ncbi.nlm.nih.gov/36693400/)
+2. [The TEAM Study Investigators and the ANZICS Clinical Trials Group. Early Active Mobilization during Mechanical Ventilation in the ICU. N Engl J Med. 2022 Oct 26;387(19):1747-1758. doi: 10.1056/NEJMoa2209083.](https://www.nejm.org/doi/full/10.1056/NEJMoa2209083)
+3. [Hodgson CL, Stiller K, Needham DM, Tipping CJ, Harrold M, Baldwin CE, Bradley S, Berney S, Caruana LR, Elliott D, Green M, Haines K, Higgins AM, Kaukonen KM, Leditschke IA, Nickels MR, Paratz J, Patman S, Skinner EH, Young PJ, Zanni JM, Denehy L, Webb SA. Expert consensus and recommendations on safety criteria for active mobilization of mechanically ventilated critically ill adults. Crit Care. 2014 Dec 4;18(6):658. doi: 10.1186/s13054-014-0658-y. PMID: 25475522; PMCID: PMC4301888.](https://pubmed.ncbi.nlm.nih.gov/25475522/)
+4. [Ohbe H, Jo T, Matsui H, Fushimi K, Yasunaga H. Differences in effect of early enteral nutrition on mortality among ventilated adults with shock requiring low-, medium-, and high-dose noradrenaline: A propensity-matched analysis. Clin Nutr. 2020 Feb;39(2):460-467. doi: 10.1016/j.clnu.2019.02.020. Epub 2019 Feb 15. PMID: 30808573.](https://pubmed.ncbi.nlm.nih.gov/30808573/)
+5. [Goradia S, Sardaneh AA, Narayan SW, Penm J, Patanwala AE. Vasopressor dose equivalence: A scoping review and suggested formula. J Crit Care. 2021 Feb;61:233-240. doi: 10.1016/j.jcrc.2020.11.002. Epub 2020 Nov 14. PMID: 33220576.](https://pubmed.ncbi.nlm.nih.gov/33220576/)
 
 
