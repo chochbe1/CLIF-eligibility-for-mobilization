@@ -5,6 +5,7 @@ import os
 import duckdb
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pytz
 
 conn = duckdb.connect(database=':memory:')
 
@@ -110,8 +111,40 @@ def standardize_datetime(df):
             df[col] = df[col].dt.tz_convert(None) if df[col].dt.tz is not None else df[col]
     return df
 
-def deftime(df):
+def standardize_datetime_utc(df, dttm_columns):
+    """
+    Standardize datetime columns in a DataFrame:
+    - Converts to datetime if not already
+    - Ensures UTC timezone for all timestamps
+    - Removes timezone information after conversion
+    - Standardizes format to '%Y-%m-%d %H:%M:%S'
     
+    Parameters:
+        df (pd.DataFrame): The DataFrame containing the data.
+        dttm_columns (str or list): A column name or list of column names to standardize.
+    
+    Returns:
+        pd.DataFrame: DataFrame with standardized datetime columns.
+    """
+    if isinstance(dttm_columns, str):
+        dttm_columns = [dttm_columns]  # Convert single column name to list
+
+    for col in dttm_columns:
+        if col in df.columns:
+            # Convert to datetime if not already
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+            # Check if timezone-aware
+            if df[col].dt.tz is None:
+                df[col] = df[col].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='shift_forward')
+            else:
+                df[col] = df[col].dt.tz_convert('UTC')
+            # Remove timezone and convert to standard format
+            df[col] = df[col].dt.tz_convert(None)
+        else:
+            print(f"Couldn't find {col} column in this df")
+    return df
+
+def deftime(df):
     # Count entries with both hours and minutes
     has_hr_min = df.notna() & (df.dt.hour.notna() & df.dt.minute.notna())
     count_with_hr_min = has_hr_min.sum()
@@ -122,9 +155,6 @@ def deftime(df):
     # Print the results
     print(f"Count with hours and minutes: {count_with_hr_min}")
     print(f"Count without hours and minutes: {count_without_hr_min}")
-
-def getdttm(df):
-    return pd.to_datetime(df).dt.ceil('min')
 
 def count_unique_encounters(df, encounter_column='hospitalization_id'):
     """
@@ -226,6 +256,25 @@ def remove_duplicates(df, columns, df_name):
         print(f"No duplicates found based on columns: {columns}.")
     
     return df_cleaned
+
+def apply_outlier_thresholds(df, col_name, min_val, max_val):
+    """
+    Helper function to clamp column values between min and max thresholds, 
+    setting values outside range to NaN.
+    
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the column to process
+        col_name (str): Name of the column to apply thresholds to
+        min_val (float): Minimum allowed value (inclusive)
+        max_val (float): Maximum allowed value (inclusive)
+        
+    Returns:
+        None: Modifies the DataFrame in place by updating the specified column
+    """
+    df[col_name] = df[col_name].where(df[col_name].between(min_val, 
+                                                           max_val, 
+                                                           inclusive='both'), 
+                                                           np.nan)
 
 def process_resp_support(df):
     """
@@ -400,6 +449,184 @@ def process_resp_support(df):
     print("Waterfall processing completed.")
     return df
 
+def stitch_encounters(hospitalization, adt, time_interval=6):
+    """
+    Stitches together related hospital encounters that occur within a specified time interval of each other.
+    
+    Args:
+        hospitalization (pd.DataFrame): Hospitalization table with required columns
+        adt (pd.DataFrame): ADT table with required columns
+        time_interval (int, optional): Number of hours between encounters to consider them linked. Defaults to 6.
+        
+    Returns:
+        pd.DataFrame: Stitched encounters with encounter blocks
+    """
+    hospitalization_filtered = hospitalization[["patient_id","hospitalization_id","admission_dttm","discharge_dttm","age_at_admission"]].copy()
+    hospitalization_filtered['admission_dttm'] = pd.to_datetime(hospitalization_filtered['admission_dttm'])
+    hospitalization_filtered['discharge_dttm'] = pd.to_datetime(hospitalization_filtered['discharge_dttm'])
+
+    hosp_adt_join = pd.merge(hospitalization_filtered[["patient_id","hospitalization_id","admission_dttm","discharge_dttm"]],
+                      adt[["hospitalization_id","in_dttm","out_dttm","location_category","hospital_id"]],
+                 on="hospitalization_id",how="left")
+
+    hospital_cat = hosp_adt_join[["hospitalization_id","in_dttm","out_dttm","hospital_id"]]
+
+    # Step 1: Sort by patient_id and admission_dttm
+    hospital_block = hosp_adt_join[["patient_id","hospitalization_id","admission_dttm","discharge_dttm"]]
+    hospital_block = hospital_block.drop_duplicates()
+    hospital_block = hospital_block.sort_values(by=["patient_id", "admission_dttm"]).reset_index(drop=True)
+    hospital_block = hospital_block[["patient_id","hospitalization_id","admission_dttm","discharge_dttm"]]
+
+    # Step 2: Calculate time between discharge and next admission
+    hospital_block["next_admission_dttm"] = hospital_block.groupby("patient_id")["admission_dttm"].shift(-1)
+    hospital_block["discharge_to_next_admission_hrs"] = (
+        (hospital_block["next_admission_dttm"] - hospital_block["discharge_dttm"]).dt.total_seconds() / 3600
+    )
+
+    # Step 3: Create linked column based on time_interval
+    hospital_block["linked6hrs"] = hospital_block["discharge_to_next_admission_hrs"] < time_interval
+
+    # Sort values to ensure correct order
+    hospital_block = hospital_block.sort_values(by=["patient_id", "admission_dttm"]).reset_index(drop=True)
+
+    # Initialize encounter_block with row indices + 1
+    hospital_block['encounter_block'] = hospital_block.index + 1
+
+    # Iteratively propagate the encounter_block values
+    while True:
+        shifted = hospital_block['encounter_block'].shift(-1)
+        mask = hospital_block['linked6hrs'] & (hospital_block['patient_id'] == hospital_block['patient_id'].shift(-1))
+        hospital_block.loc[mask, 'encounter_block'] = shifted[mask]
+        if hospital_block['encounter_block'].equals(hospital_block['encounter_block'].bfill()):
+            break
+
+    hospital_block['encounter_block'] = hospital_block['encounter_block'].bfill(downcast='int')
+    hospital_block = pd.merge(hospital_block,hospital_cat,how="left",on="hospitalization_id")
+    hospital_block = hospital_block.sort_values(by=["patient_id", "admission_dttm","in_dttm","out_dttm"]).reset_index(drop=True)
+    hospital_block = hospital_block.drop_duplicates()
+
+    hospital_block2 = hospital_block.groupby(['patient_id','encounter_block']).agg(
+        admission_dttm=pd.NamedAgg(column='admission_dttm', aggfunc='min'),
+        discharge_dttm=pd.NamedAgg(column='discharge_dttm', aggfunc='max'),
+        hospital_id = pd.NamedAgg(column='hospital_id', aggfunc='last'),
+        list_hospitalization_id=pd.NamedAgg(column='hospitalization_id', aggfunc=lambda x: sorted(x.unique()))
+    ).reset_index()
+
+    df = pd.merge(hospital_block[["patient_id",
+                                  "hospitalization_id",
+                                  "encounter_block"]].drop_duplicates(),
+             hosp_adt_join[["hospitalization_id","location_category","in_dttm","out_dttm"]], on="hospitalization_id",how="left")
+
+    df = pd.merge(df,hospital_block2[["encounter_block",
+                                      "admission_dttm",
+                                      "discharge_dttm",
+                                      "hospital_id",
+                                     "list_hospitalization_id"]],on="encounter_block",how="left")
+    df = df.drop_duplicates(subset=["patient_id","encounter_block","in_dttm","out_dttm","location_category"])
+    
+    return df
+
+def create_summary_table(
+    df, 
+    numeric_col, 
+    group_by_cols=None
+):
+    """
+    Create a summary table for a given numeric column in a DataFrame, optionally grouped.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame containing your data.
+    numeric_col : str
+        The name of the numeric column to summarize (e.g., 'fio2_set').
+    group_by_cols : str or list of str, optional
+        Column name(s) to group by (e.g., 'device_category', ['device_category','mode_category'], etc.).
+        If None, the function provides a single overall summary for the entire df.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with columns for each statistic: 
+        ['N', 'missing', 'min', 'q25', 'median', 'q75', 'mean', 'max'].
+        If group_by_cols is provided, those columns appear first in the output.
+    """
+
+    # 1) Define helper functions for quartiles & missing
+    def q25(x):
+        return x.quantile(0.25)
+    q25.__name__ = 'q25'
+
+    def q50(x):
+        return x.quantile(0.50)
+    q50.__name__ = 'median'
+
+    def q75(x):
+        return x.quantile(0.75)
+    q75.__name__ = 'q75'
+
+    def missing_count(x):
+        return x.isna().sum()
+    missing_count.__name__ = 'missing'
+
+    # 2) Build an aggregation dictionary for the chosen numeric_col
+    #    It includes N (count of non-null), missing, min, q25, median, q75, mean, max
+    agg_dict = {
+        numeric_col: [
+            'count',       # Non-missing count
+            missing_count, # Missing
+            'min',
+            q25,
+            q50,
+            q75,
+            'mean',
+            'max'
+        ]
+    }
+
+    # 3) Perform groupby if group_by_cols is provided, else do a global summary
+    if group_by_cols is not None:
+        # Accept a single string or a list of strings
+        if isinstance(group_by_cols, str):
+            group_by_cols = [group_by_cols]
+        summary = df.groupby(group_by_cols).agg(agg_dict)
+    else:
+        # No grouping => just aggregate the entire DataFrame
+        summary = df.agg(agg_dict)
+
+    # 4) The result is a multi-level column index. Flatten it.
+    #    We'll get something like:
+    #       (numeric_col, 'count'), (numeric_col, '<lambda>'), ...
+    #    After flattening, rename the stats to a friendlier label.
+    summary.columns = summary.columns.droplevel(0)  # drop the numeric_col level
+    # summary now has columns like: ['count','missing','min','q25','median','q75','mean','max']
+
+    # 5) Optionally, reorder columns in a nice sequence
+    #    We'll define the exact ordering we want:
+    desired_order = ['count','missing','min','q25','median','q75','mean','max']
+    # Some columns might have <lambda> instead of 'missing' if the function name wasn't recognized
+    # We can do a manual rename if needed.
+    rename_map = {}
+    for col in summary.columns:
+        if '<lambda>' in col:
+            rename_map[col] = 'missing'  # rename the lambda to 'missing'
+    summary.rename(columns=rename_map, inplace=True)
+
+    # Now reorder columns if they all exist
+    existing_cols = [c for c in desired_order if c in summary.columns]
+    summary = summary[existing_cols]  # reorder if possible
+
+    # 6) If we had group_by_cols, reset_index so those become DataFrame columns
+    if group_by_cols is not None:
+        summary = summary.reset_index()
+
+    # 7) Final step: rename for clarity, e.g. rename 'count' -> 'N' if desired
+    rename_final = {
+        'count': 'N'
+    }
+    summary.rename(columns=rename_final, inplace=True)
+
+    return summary
 
 helper = load_config()
 print(helper)

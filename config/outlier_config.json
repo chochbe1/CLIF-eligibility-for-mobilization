@@ -1,0 +1,18 @@
+{
+    "fio2_set": [0.21, 1.0],
+    "resp_rate_set": [0, 60],
+    "resp_rate_obs": [0, 100],
+    "peep_set": [0, 50],
+    "lpm_set": [0, 60],
+
+    "height_cm": [76, 255],
+    "weight_kg": [20, 1100],
+    
+    "norepinephrine": [0.01, 3],
+    "epinephrine": [0.01, 0.1],
+    "phenylephrine": [0.1, 5],
+    "dopamine": [2, 20],
+    "metaraminol": [0.5, 10],
+    "angiotensin": [0.02, 0.2],
+    "vasopressin": [0.01, 0.1]
+  }
