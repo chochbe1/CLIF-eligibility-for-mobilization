@@ -1,0 +1,257 @@
+## Load libraries
+
+```{r}
+# Load necessary libraries
+packages <- c("duckdb", "lubridate", "tidyverse", "dplyr", "cmprsk", 
+              "arrow", "bigreadr", "openxlsx",
+              "stringr", "data.table", "jsonlite")
+
+install_if_missing <- function(package) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package, dependencies = TRUE)
+    library(package, character.only = TRUE)
+  }
+}
+sapply(packages, install_if_missing)
+```
+
+```{r}
+load_config <- function() {
+  json_path <- "../config/config.json"
+  if (file.exists(json_path)) {
+    config <- fromJSON(json_path)
+    message("Loaded configuration from config.json")
+  } else {
+    stop("Configuration file not found. Please create config.json ",
+         "based on the config_template.")
+  }
+  return(config)
+}
+```
+
+```{r}
+config <- load_config()
+site_name <- config$site_name
+tables_path <- config$tables_path
+timezone <- config$timezone
+```
+
+
+```{r}
+patel_data_filepath <- "../output/intermediate/competing_risk_patel.parquet"
+team_data_filepath <- "../output/intermediate/competing_risk_team.parquet"
+yellow_data_filepath <- "../output/intermediate/competing_risk_yellow.parquet"
+```
+
+
+## Patel
+```{r}
+patel <- open_dataset(patel_data_filepath) |> collect()
+patel_clean <- patel |> 
+  select(encounter_block, t_event, outcome) |> 
+  rename(time = t_event,
+         status = outcome)
+
+fit_patel <- cuminc(
+  ftime = patel_clean$time,
+  fstatus = patel_clean$status,
+  cencode=0
+)
+
+plot(fit_patel2, main="Cumulative Incidence (Chicago criteria)")
+```
+```{r}
+patel_cause1 <- fit_patel[["1 1"]]
+df_patel_cause1 <- data.frame(
+  time = patel_cause1$time,
+  est  = patel_cause1$est
+)
+
+if (!is.null(patel_cause1$lower) && !is.null(patel_cause1$upper)) {
+  # The intervals exist already
+  df_patel_cause1$lower <- patel_cause1$lower
+  df_patel_cause1$upper <- patel_cause1$upper
+} else if (!is.null(patel_cause1$var)) {
+  # Use the "var" array with a normal approximation
+  z_val <- 1.96   # for ~95% CI
+  var_vec <- patel_cause1$var
+  # est +/- z * sqrt(var)
+  lower_approx <- df_patel_cause1$est - z_val * sqrt(var_vec)
+  upper_approx <- df_patel_cause1$est + z_val * sqrt(var_vec)
+  # clamp between [0,1]
+  df_patel_cause1$lower <- pmax(0, lower_approx)
+  df_patel_cause1$upper <- pmin(1, upper_approx)
+
+} else {
+  # no var => no intervals
+  df_patel_cause1$lower <- NA
+  df_patel_cause1$upper <- NA
+}
+
+cross_idx <- which(df_patel_cause1$est >= 0.5)
+if (length(cross_idx) == 0) {
+  patel_median_time <- Inf
+} else {
+  patel_median_time <- df_patel_cause1$time[cross_idx[1]]
+}
+
+cat("Median time to eligibility (Patel) =", patel_median_time, "hours\n")
+readr::write_csv(df_patel_cause1, "../output/final/patel_cif.csv")
+
+cat("Wrote CSV to output/final/patel_cif.csv\n")
+```
+
+## Team
+```{r}
+team <- open_dataset(team_data_filepath) |> collect()
+team_clean <- team |> 
+  select(encounter_block, t_event, outcome) |> 
+  rename(time = t_event,
+         status = outcome)
+
+fit_team <- cuminc(
+  ftime = team_clean$time,
+  fstatus = team_clean$status,
+  cencode=0
+)
+
+plot(fit_team, main="Cumulative Incidence (TEAM criteria)")
+```
+
+```{r}
+team_cause1 <- fit_team[["1 1"]]
+df_team_cause1 <- data.frame(
+  time = team_cause1$time,
+  est  = team_cause1$est
+)
+
+if (!is.null(team_cause1$lower) && !is.null(team_cause1$upper)) {
+  df_team_cause1$lower <- team_cause1$lower
+  df_team_cause1$upper <- team_cause1$upper
+} else if (!is.null(team_cause1$var)) {
+  # Use the "var" array with a normal approximation
+  z_val <- 1.96   # for ~95% CI
+  var_vec <- team_cause1$var
+  # est +/- z * sqrt(var)
+  lower_approx <- df_team_cause1$est - z_val * sqrt(var_vec)
+  upper_approx <- df_team_cause1$est + z_val * sqrt(var_vec)
+  # clamp between [0,1]
+  df_team_cause1$lower <- pmax(0, lower_approx)
+  df_team_cause1$upper <- pmin(1, upper_approx)
+
+} else {
+  # no var => no intervals
+  df_team_cause1$lower <- NA
+  df_team_cause1$upper <- NA
+}
+cross_idx <- which(df_team_cause1$est >= 0.5)
+if (length(cross_idx) == 0) {
+  team_median_time <- Inf
+} else {
+  team_median_time <- df_team_cause1$time[cross_idx[1]]
+}
+
+cat("Median time to eligibility (Patel) =", team_median_time, "hours\n")
+readr::write_csv(df_team_cause1, "../output/final/patel_cif.csv")
+
+cat("Wrote CSV to output/final/team_cif.csv\n")
+```
+
+## Yellow
+```{r}
+yellow <- open_dataset(yellow_data_filepath) |> collect()
+yellow_clean <- yellow |> 
+  select(encounter_block, t_event, outcome) |> 
+  rename(time = t_event,
+         status = outcome)
+
+fit_yellow <- cuminc(
+  ftime = yellow_clean$time,
+  fstatus = yellow_clean$status,
+  cencode=0
+)
+
+plot(fit_yellow, main="Cumulative Incidence (Yellow criteria)")
+```
+
+```{r}
+yellow_cause1 <- fit_yellow[["1 1"]]
+df_yellow_cause1 <- data.frame(
+  time = yellow_cause1$time,
+  est  = yellow_cause1$est
+)
+
+if (!is.null(yellow_cause1$lower) && !is.null(yellow_cause1$upper)) {
+  df_yellow_cause1$lower <- yellow_cause1$lower
+  df_yellow_cause1$upper <- yellow_cause1$upper
+} else if (!is.null(yellow_cause1$var)) {
+  # Use the "var" array with a normal approximation
+  z_val <- 1.96   # for ~95% CI
+  var_vec <- yellow_cause1$var
+  # est +/- z * sqrt(var)
+  lower_approx <- df_yellow_cause1$est - z_val * sqrt(var_vec)
+  upper_approx <- df_yellow_cause1$est + z_val * sqrt(var_vec)
+  # clamp between [0,1]
+  df_yellow_cause1$lower <- pmax(0, lower_approx)
+  df_yellow_cause1$upper <- pmin(1, upper_approx)
+
+} else {
+  # no var => no intervals
+  df_yellow_cause1$lower <- NA
+  df_yellow_cause1$upper <- NA
+}
+cross_idx <- which(df_yellow_cause1$est >= 0.5)
+if (length(cross_idx) == 0) {
+  yellow_median_time <- Inf
+} else {
+  yellow_median_time <- df_yellow_cause1$time[cross_idx[1]]
+}
+
+cat("Median time to eligibility (Patel) =", yellow_median_time, "hours\n")
+readr::write_csv(df_yellow_cause1, "../output/final/yellow_cif.csv")
+
+cat("Wrote CSV to output/final/yellow_cif.csv\n")
+```
+
+
+```{r}
+plot(
+  fit_patel$`1 1`$time, fit_patel$`1 1`$est, 
+  col = "maroon",
+  type = "l",
+  lty = 1,
+  lwd = 2,
+  xlab = "Time (hours)",
+  ylab = "Cumulative Incidence Probability",
+  main = "Competing Risk: All Criteria"
+)
+
+# Overlay TEAM
+lines(
+  fit_team$`1 1`$time, fit_team$`1 1`$est,
+  col = "blue",
+  lty = 1,
+  lwd = 2
+)
+
+# Overlay Yellow
+lines(
+  fit_yellow$`1 1`$time, fit_yellow$`1 1`$est,
+  col = "darkgoldenrod1",
+  lty = 1,
+  lwd = 2
+)
+
+# Add a legend
+legend(
+  "bottomright",
+  legend = c("Patel", "TEAM", "Yellow"),
+  col = c("maroon", "blue", "darkgoldenrod1"),
+  lty = 1,
+  lwd = 2
+)
+
+
+```
+
+ 

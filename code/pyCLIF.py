@@ -6,6 +6,8 @@ import duckdb
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pytz
+from tableone import TableOne
+from datetime import datetime
 
 conn = duckdb.connect(database=':memory:')
 
@@ -17,6 +19,8 @@ def load_config():
     print("Loaded configuration from config.json")
     
     return config
+
+helper = load_config()
 
 def load_data(table, sample_size=None, columns=None, filters=None):
     """
@@ -109,6 +113,41 @@ def standardize_datetime(df):
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             # Here converting to 'datetime64[ns]' for uniformity and removing timezone with 'tz_convert(None)'
             df[col] = df[col].dt.tz_convert(None) if df[col].dt.tz is not None else df[col]
+    return df
+
+def standardize_datetime_tz(df, dttm_columns, timezone):
+    """
+    Standardize datetime columns in a DataFrame:
+    - Converts to datetime if not already 
+    - Ensures specified timezone for all timestamps
+    - Removes timezone information after conversion
+    - Standardizes format to '%Y-%m-%d %H:%M:%S'
+    
+    Parameters:
+        df (pd.DataFrame): The DataFrame containing the data.
+        dttm_columns (str or list): A column name or list of column names to standardize.
+        timezone (str): The timezone to convert timestamps to. Defaults to 'UTC'.
+    
+    Returns:
+        pd.DataFrame: DataFrame with standardized datetime columns.
+    """
+    if isinstance(dttm_columns, str):
+        dttm_columns = [dttm_columns]  # Convert single column name to list
+
+    for col in dttm_columns:
+        if col in df.columns:
+            # Convert to datetime if not already
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+            # Check if timezone-aware
+            if df[col].dt.tz is None:
+                print(f"Column {col} is timezone aware: {df[col].dt.tz}")
+                df[col] = df[col].dt.tz_localize(timezone, ambiguous='NaT', nonexistent='shift_forward')
+            else:
+                df[col] = df[col].dt.tz_convert(timezone)
+            # Remove timezone and convert to standard format
+            df[col] = df[col].dt.tz_convert(None)
+        else:
+            print(f"Couldn't find {col} column in this df")
     return df
 
 def standardize_datetime_utc(df, dttm_columns):
@@ -628,5 +667,117 @@ def create_summary_table(
 
     return summary
 
-helper = load_config()
-print(helper)
+def is_dose_within_range(row, outlier_dict):
+    '''
+    Check if med_dose_converted is within the outlier-configured range for this med_category.
+    Parameters:
+        row (pd.Series): A row from a DataFrame, must include 'med_category' and 'med_dose_converted'.
+        outlier_dict (dict): Dictionary of min/max pairs from outlier_config.json.
+    Returns:
+        bool: True if the dose is within range or if med_category is not found, False otherwise.
+    '''
+    med_category = row['med_category']
+    med_dose_converted = row['med_dose_converted']
+    dose_range = outlier_dict.get(med_category, None)
+    if dose_range is None:
+        return False
+    min_dose, max_dose = dose_range
+    return min_dose <= med_dose_converted <= max_dose
+
+def generate_table_one(final_df, filename):
+    """
+    Generate Table 1 from the input dataframe by merging patient and hospitalization data,
+    selecting relevant columns, mapping race categories, and generating descriptive statistics.
+
+    Parameters:
+        final_df (pd.DataFrame): The input dataframe containing hospitalization data.
+        filename (str): The name of the output file (without path).
+
+    Returns:
+        pd.DataFrame: The generated Table 1 as a dataframe.
+    """
+    # Load patient and hospitalization data
+    patient = load_data('clif_patient')
+    hospitalization = load_data('clif_hospitalization')
+
+    # Ensure ID columns are strings
+    hospitalization['hospitalization_id'] = hospitalization['hospitalization_id'].astype(str)
+    patient['patient_id'] = patient['patient_id'].astype(str)
+
+    # Remove duplicates
+    patient = remove_duplicates(patient, ['patient_id'], 'patient')
+    hospitalization = remove_duplicates(hospitalization, ['hospitalization_id'], 'hospitalization')
+
+    # Select relevant columns
+    columns_to_keep = [
+        'hospitalization_id', 'encounter_block', 'recorded_date', 'recorded_hour', 
+        'patel_flag', 'team_flag', 'any_yellow_or_green_no_red', 'all_green', 
+        'all_green_no_red', 'any_green', 'ne_calc_min', 'max_peep_set', 'min_fio2_set'
+    ]
+    
+    final_df_table1 = final_df[columns_to_keep]
+
+    # Merge with patient and hospitalization data
+    final_df_table1 = pd.merge(final_df_table1, hospitalization, how='left', on='hospitalization_id')
+    final_df_table1 = pd.merge(final_df_table1, patient, how='left', on='patient_id')
+
+    # Map race column
+    final_df_table1 = map_race_column(final_df_table1, 'race_category')
+
+    # Define categorical and continuous variables
+    categorical = ['sex_category', 'race_new', 'ethnicity_category']
+    continuous = ['age_at_admission']
+
+    # Include additional continuous variables if they exist in the dataframe
+    additional_continuous = ['ne_calc_min', 'max_peep_set', 'min_fio2_set']
+    continuous += [var for var in additional_continuous if var in final_df_table1.columns]
+
+    # Define criteria-based subsets
+    criteria_dict = {
+        'Patel Criteria': 'patel_flag',
+        'TEAM Criteria': 'team_flag',
+        'Yellow Criteria': 'any_yellow_or_green_no_red',
+        'All Green Criteria': 'all_green',
+        'All Green No Red Criteria': 'all_green_no_red',
+        'Any Green Criteria': 'any_green'
+    }
+
+    # Create criteria-based subsets
+    subsets = [final_df_table1.assign(Criteria='All Encounters')]
+    for criteria, column in criteria_dict.items():
+        subsets.append(final_df_table1[final_df_table1[column] == 1].assign(Criteria=criteria))
+
+    # Combine all subsets
+    combined_df = pd.concat(subsets, ignore_index=True)
+
+    # Remove duplicates to ensure each hospitalization_id appears only once per criteria
+    combined_df = combined_df.drop_duplicates(subset=['hospitalization_id', 'Criteria'])
+
+    # Create TableOne
+    table1 = TableOne(
+        combined_df,
+        columns=categorical + continuous,
+        categorical=categorical,
+        groupby='Criteria',
+        pval=False,
+        missing=False
+    )
+
+    # Convert TableOne object to DataFrame
+    table1_df = table1.tableone.reset_index()
+
+    # Remove 'Overall' column
+    table1_check = table1_df.drop(columns=[('Grouped by Criteria', 'Overall')])
+    # Rename the MultiIndex columns
+    new_column_names = ['Characteristics', 'Category', 'All Encounters', 'All Green Criteria', 'All Green No Red Criteria', 
+                        'Any Green Criteria', 'Patel Criteria', 'TEAM Criteria', 'Yellow Criteria'] 
+    table1_check.columns = new_column_names
+    # Save to CSV
+    # Construct the output path using the filename provided
+    output_path = f'../output/final/{filename}_{helper["site_name"]}_{datetime.now().date()}.csv'
+    table1_check.to_csv(output_path, index=False)
+    print(f"TableOne saved to {output_path}")
+
+    return table1_check
+
+
