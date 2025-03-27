@@ -60,6 +60,7 @@ fit_patel <- cuminc(
 
 plot(fit_patel2, main="Cumulative Incidence (Chicago criteria)")
 ```
+
 ```{r}
 patel_cause1 <- fit_patel[["1 1"]]
 df_patel_cause1 <- data.frame(

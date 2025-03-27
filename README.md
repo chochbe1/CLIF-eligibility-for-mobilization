@@ -8,22 +8,19 @@ The primary objective of this project is to determine the windows of opportunity
 ## Required CLIF tables and fields
 
 The following tables are required:
-1. **patient**: `patient_id`, `race_category`, `ethnicity_category`, `sex_category`
+1. **patient**: `patient_id`, `race_category`, `ethnicity_category`, `sex_category`, `death_dttm`
 2. **hospitalization**: `patient_id`, `hospitalization_id`, `admission_dttm`, `discharge_dttm`, `age_at_admission`
 3. **vitals**: `hospitalization_id`, `recorded_dttm`, `vital_category`, `vital_value`
    - `vital_category` = 'heart_rate', 'resp_rate', 'sbp', 'dbp', 'map', 'resp_rate', 'spo2', ''weight_kg', 'height_cm'
 4. **labs**: `hospitalization_id`, `lab_result_dttm`, `lab_category`, `lab_value`
    - `lab_category` = 'lactate'
 5. **medication_admin_continuous**: `hospitalization_id`, `admin_dttm`, `med_name`, `med_category`, `med_dose`, `med_dose_unit`
-   - `med_category` = "norepinephrine", "epinephrine", "phenylephrine", "vasopressin", "dopamine", "angiotensin", "nicardipine", "nitroprusside", "clevidipine", "cisatracurium"
+   - `med_category` = "norepinephrine", "epinephrine", "phenylephrine", "vasopressin", "dopamine", "angiotensin", "nicardipine", "nitroprusside", "clevidipine", "cisatracurium", "vecuronium", "rocuronium"
 6. **respiratory_support**: `hospitalization_id`, `recorded_dttm`, `device_category`, `mode_category`, `tracheostomy`, `fio2_set`, `lpm_set`, `resp_rate_set`, `peep_set`, `resp_rate_obs`
 
 ## Cohort Identification 
 
-The study period is from March 1, 2020, to March 31, 2022. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters were excluded from the analysis based on the following criteria:
-- Encounters that were intubated for less than 2 hours
-- Encounters that received a tracheostomy within 72 hours of their first intubation
-- Encounters that received Cisatracurium at any point in the first 72 hours
+The study period is from March 1, 2020, to March 31, 2022. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters that were intubated for less than 4 hours were excluded. Additionally, encounters that received tracheostomy or were receiving any paralytic drug were considered ineligible to be mobilised for that hour.
 
 ## Configuration
 
