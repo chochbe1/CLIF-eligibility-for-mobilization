@@ -58,10 +58,6 @@ setup.bat
 2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
 
 
-Code run
-
-Rscript run_competing_risk.R
-
 
 ## References
 
