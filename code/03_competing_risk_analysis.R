@@ -30,7 +30,7 @@ compute_cif_df <- function(time, status, cause = 1, alpha = 0.05) {
   if (!is.null(ci$lower) && !is.null(ci$upper)) {
     out$lower <- ci$lower; out$upper <- ci$upper
   } else if (!is.null(ci$var)) {
-    z <- qnorm(0.975)                       # 95 % CI
+    z <- qnorm(0.975)                       
     out$lower <- pmax(0, ci$est - z*sqrt(ci$var))
     out$upper <- pmin(1, ci$est + z*sqrt(ci$var))
   } else {
@@ -82,13 +82,13 @@ cols <- c(Patel="maroon", TEAM="blue", Yellow="darkgoldenrod1", Green="darkgreen
 plot(results[[1]]$fit$`1 1`$time, results[[1]]$fit$`1 1`$est,
      type="l", lwd = 2, col = cols[results[[1]]$name],
      xlab="Time (hours)", ylab="Cumulative Incidence Probability",
-     main="Competing‐risk: All criteria")
+     main="Competing-risk: All criteria")
 for (i in 2:length(results))
   lines(results[[i]]$fit$`1 1`$time, results[[i]]$fit$`1 1`$est,
         col = cols[results[[i]]$name], lwd = 2)
 legend("bottomright", legend = names(cols), col = cols, lwd = 2, lty = 1)
 dev.off()
-cat("✓ cif_overlay.png written\n")
+cat("cif_overlay.png written\n")
 
 ## 4·b median times -------------------------------------------------------
 median_tbl <- data.frame(
@@ -141,5 +141,5 @@ write_json(fg_export,
            path = file.path(out_dir, "subhazard_summary.json"),
            digits = 8, auto_unbox = TRUE)
 
-cat("\n✓ Fine–Gray objects written to",
+cat("\n Fine–Gray objects written to",
     normalizePath(out_dir), "\n")

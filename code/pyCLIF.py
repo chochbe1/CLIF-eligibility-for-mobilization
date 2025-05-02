@@ -456,21 +456,24 @@ def stitch_encounters(hospitalization, adt, time_interval=6):
     Returns:
         pd.DataFrame: Stitched encounters with encounter blocks
     """
-    hospitalization_filtered = hospitalization[["patient_id","hospitalization_id","admission_dttm","discharge_dttm","age_at_admission"]].copy()
+    hospitalization_filtered = hospitalization[["patient_id","hospitalization_id","admission_dttm",
+                                                "discharge_dttm","age_at_admission",  "discharge_category"]].copy()
     hospitalization_filtered['admission_dttm'] = pd.to_datetime(hospitalization_filtered['admission_dttm'])
     hospitalization_filtered['discharge_dttm'] = pd.to_datetime(hospitalization_filtered['discharge_dttm'])
 
-    hosp_adt_join = pd.merge(hospitalization_filtered[["patient_id","hospitalization_id","admission_dttm","discharge_dttm"]],
+    hosp_adt_join = pd.merge(hospitalization_filtered[["patient_id","hospitalization_id","age_at_admission",
+                                                       "admission_dttm","discharge_dttm",
+                                                        "discharge_category"]], 
                       adt[["hospitalization_id","in_dttm","out_dttm","location_category","hospital_id"]],
                  on="hospitalization_id",how="left")
 
     hospital_cat = hosp_adt_join[["hospitalization_id","in_dttm","out_dttm","hospital_id"]]
 
     # Step 1: Sort by patient_id and admission_dttm
-    hospital_block = hosp_adt_join[["patient_id","hospitalization_id","admission_dttm","discharge_dttm"]]
+    hospital_block = hosp_adt_join[["patient_id","hospitalization_id","admission_dttm","discharge_dttm", "age_at_admission",  "discharge_category"]]
     hospital_block = hospital_block.drop_duplicates()
     hospital_block = hospital_block.sort_values(by=["patient_id", "admission_dttm"]).reset_index(drop=True)
-    hospital_block = hospital_block[["patient_id","hospitalization_id","admission_dttm","discharge_dttm"]]
+    hospital_block = hospital_block[["patient_id","hospitalization_id","admission_dttm","discharge_dttm", "age_at_admission",  "discharge_category"]]
 
     # Step 2: Calculate time between discharge and next admission
     hospital_block["next_admission_dttm"] = hospital_block.groupby("patient_id")["admission_dttm"].shift(-1)
@@ -503,7 +506,10 @@ def stitch_encounters(hospitalization, adt, time_interval=6):
     hospital_block2 = hospital_block.groupby(['patient_id','encounter_block']).agg(
         admission_dttm=pd.NamedAgg(column='admission_dttm', aggfunc='min'),
         discharge_dttm=pd.NamedAgg(column='discharge_dttm', aggfunc='max'),
+        # admission_type_category=pd.NamedAgg(column='admission_type_category', aggfunc='first'),
+        discharge_category=pd.NamedAgg(column='discharge_category', aggfunc='last'),
         hospital_id = pd.NamedAgg(column='hospital_id', aggfunc='last'),
+        age_at_admission=pd.NamedAgg(column='age_at_admission', aggfunc='last'),
         list_hospitalization_id=pd.NamedAgg(column='hospitalization_id', aggfunc=lambda x: sorted(x.unique()))
     ).reset_index()
 
@@ -515,6 +521,7 @@ def stitch_encounters(hospitalization, adt, time_interval=6):
     df = pd.merge(df,hospital_block2[["encounter_block",
                                       "admission_dttm",
                                       "discharge_dttm",
+                                      "discharge_category",
                                       "hospital_id",
                                      "list_hospitalization_id"]],on="encounter_block",how="left")
     df = df.drop_duplicates(subset=["patient_id","encounter_block","in_dttm","out_dttm","location_category"])
