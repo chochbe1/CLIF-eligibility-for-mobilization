@@ -17,6 +17,7 @@ The following tables are required:
 5. **medication_admin_continuous**: `hospitalization_id`, `admin_dttm`, `med_name`, `med_category`, `med_dose`, `med_dose_unit`
    - `med_category` = "norepinephrine", "epinephrine", "phenylephrine", "vasopressin", "dopamine", "angiotensin", "nicardipine", "nitroprusside", "clevidipine", "cisatracurium", "vecuronium", "rocuronium"
 6. **respiratory_support**: `hospitalization_id`, `recorded_dttm`, `device_category`, `mode_category`, `tracheostomy`, `fio2_set`, `lpm_set`, `resp_rate_set`, `peep_set`, `resp_rate_obs`
+7. crrt_therapy: `hospitalization_id`, `recorded_dttm`
 
 ## Cohort Identification 
 
@@ -55,6 +56,11 @@ setup.bat
 ```
 
 2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
+
+
+Code run
+
+Rscript run_competing_risk.R
 
 
 ## References

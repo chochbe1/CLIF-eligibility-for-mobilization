@@ -28,3 +28,7 @@ clif_*.fst
 output/intermediate/
 output/final/
 
+output_old/
+code/03_competing_risk_mobilization.qmd
+
+package-lock.json

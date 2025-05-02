@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import pytz
 from tableone import TableOne
 from datetime import datetime
+from typing import Union
+from functools import reduce
 
 conn = duckdb.connect(database=':memory:')
 
@@ -21,6 +23,31 @@ def load_config():
     return config
 
 helper = load_config()
+
+def load_parquet_with_tz(file_path, columns=None, filters=None, sample_size=None):
+    con = duckdb.connect()
+    # DuckDB >=0.9 understands the original zone if we ask for TIMESTAMPTZ
+    con.execute("SET timezone = 'UTC';")          # read & return in UTC
+    con.execute("SET pandas_analyze_sample=0;")   # avoid sampling issues
+
+    sel = "*" if columns is None else ", ".join(columns)
+    query = f"SELECT {sel} FROM parquet_scan('{file_path}')"
+
+    if filters:                                  # optional WHERE clause
+        clauses = []
+        for col, val in filters.items():
+            if isinstance(val, list):
+                vals = ", ".join([f"'{v}'" for v in val])
+                clauses.append(f"{col} IN ({vals})")
+            else:
+                clauses.append(f"{col} = '{val}'")
+        query += " WHERE " + " AND ".join(clauses)
+    if sample_size:
+        query += f" LIMIT {sample_size}"
+
+    df = con.execute(query).fetchdf()            # pandas DataFrame
+    con.close()
+    return df
 
 def load_data(table, sample_size=None, columns=None, filters=None):
     """
@@ -68,31 +95,7 @@ def load_data(table, sample_size=None, columns=None, filters=None):
             df = con.execute(query).fetchdf()
             con.close()
         elif helper['file_type'] == 'parquet':
-            # For Parquet, use DuckDB to read specific columns and apply filters efficiently
-            con = duckdb.connect()
-            # Build the SELECT clause
-            select_clause = "*" if not columns else ", ".join(columns)
-            # Start building the query
-            query = f"SELECT {select_clause} FROM parquet_scan('{file_path}')"
-            # Apply filters
-            if filters:
-                filter_clauses = []
-                for column, values in filters.items():
-                    if isinstance(values, list):
-                        # Escape single quotes and wrap values in quotes
-                        values_list = ', '.join(["'" + str(value).replace("'", "''") + "'" for value in values])
-                        filter_clauses.append(f"{column} IN ({values_list})")
-                    else:
-                        value = str(values).replace("'", "''")
-                        filter_clauses.append(f"{column} = '{value}'")
-                if filter_clauses:
-                    query += " WHERE " + " AND ".join(filter_clauses)
-            # Apply sample size limit
-            if sample_size:
-                query += f" LIMIT {sample_size}"
-            # Execute the query and fetch the data
-            df = con.execute(query).fetchdf()
-            con.close()
+            df = load_parquet_with_tz(file_path, columns, filters, sample_size)
         else:
             raise ValueError("Unsupported filetype. Only 'csv' and 'parquet' are supported.")
         print(f"Data loaded successfully from {file_path}")
@@ -100,100 +103,52 @@ def load_data(table, sample_size=None, columns=None, filters=None):
     else:
         raise FileNotFoundError(f"The file {file_path} does not exist in the specified directory.")
 
-def standardize_datetime(df):
+def convert_datetime_columns_to_site_tz(df, site_tz_str, verbose=True):
     """
-    Ensure that all *_dttm variables are in the correct format.
-    Convert all datetime columns to a specific precision and remove timezone
-    Parameters:
-        DataFrame: DataFrame containing the data.
-    Returns:
-        DataFrame: DataFrame containing the data.
-    """
-    for col in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            # Here converting to 'datetime64[ns]' for uniformity and removing timezone with 'tz_convert(None)'
-            df[col] = df[col].dt.tz_convert(None) if df[col].dt.tz is not None else df[col]
-    return df
+    Convert all datetime columns in the DataFrame to the specified site timezone.
 
-def standardize_datetime_tz(df, dttm_columns, timezone):
-    """
-    Standardize datetime columns in a DataFrame:
-    - Converts to datetime if not already 
-    - Ensures specified timezone for all timestamps
-    - Removes timezone information after conversion
-    - Standardizes format to '%Y-%m-%d %H:%M:%S'
-    
     Parameters:
-        df (pd.DataFrame): The DataFrame containing the data.
-        dttm_columns (str or list): A column name or list of column names to standardize.
-        timezone (str): The timezone to convert timestamps to. Defaults to 'UTC'.
-    
+    - df (pd.DataFrame): Input DataFrame.
+    - site_tz_str (str): Timezone string, e.g., "America/New_York". or "US/Central"
+    - verbose (bool): Whether to print detailed output (default: True).
+
     Returns:
-        pd.DataFrame: DataFrame with standardized datetime columns.
+    - pd.DataFrame: Modified DataFrame with datetime columns converted.
     """
-    if isinstance(dttm_columns, str):
-        dttm_columns = [dttm_columns]  # Convert single column name to list
+    site_tz = pytz.timezone(site_tz_str)
+
+    # Identify datetime-related columns
+    dttm_columns = [col for col in df.columns if 'dttm' in col]
 
     for col in dttm_columns:
-        if col in df.columns:
-            # Convert to datetime if not already
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-            # Check if timezone-aware
-            if df[col].dt.tz is None:
-                print(f"Column {col} is timezone aware: {df[col].dt.tz}")
-                df[col] = df[col].dt.tz_localize(timezone, ambiguous='NaT', nonexistent='shift_forward')
+        df[col] = pd.to_datetime(df[col], errors='coerce')
+        if pd.api.types.is_datetime64tz_dtype(df[col]):
+            current_tz = df[col].dt.tz
+            if current_tz == site_tz:
+                if verbose:
+                    print(f"{col}: Already in your timezone ({current_tz}), no conversion needed.")
+            elif current_tz == pytz.UTC:
+                print(f"{col}: null count before conversion= {df[col].isna().sum()}")
+                df[col] = df[col].dt.tz_convert(site_tz)
+                if verbose:
+                    print(f"{col}: Converted from UTC to your timezone ({site_tz}).")
+                    print(f"{col}: null count after conversion= {df[col].isna().sum()}")
             else:
-                df[col] = df[col].dt.tz_convert(timezone)
-            # Remove timezone and convert to standard format
-            df[col] = df[col].dt.tz_convert(None)
+                print(f"{col}: null count before conversion= {df[col].isna().sum()}")
+                df[col] = df[col].dt.tz_convert(site_tz)
+                if verbose:
+                    print(f"{col}: Your timezone is {current_tz}, Converting to your site timezone ({site_tz}).")
+                    print(f"{col}: null count after conversion= {df[col].isna().sum()}")
+        elif pd.api.types.is_datetime64_any_dtype(df[col]):
+            if verbose:
+                df[col] = df[col].dt.tz_localize(site_tz, ambiguous=True, nonexistent='shift_forward')
+                print(f"WARNING: {col}: Naive datetime, NOT converting. Assuming it's in your LOCAL ZONE. Please check ETL!")
         else:
-            print(f"Couldn't find {col} column in this df")
+            if verbose:
+                print(f"WARNING: {col}: Not a datetime column. Please check ETL and run again!")
     return df
 
-def standardize_datetime_utc(df, dttm_columns):
-    """
-    Standardize datetime columns in a DataFrame:
-    - Converts to datetime if not already
-    - Ensures UTC timezone for all timestamps
-    - Removes timezone information after conversion
-    - Standardizes format to '%Y-%m-%d %H:%M:%S'
-    
-    Parameters:
-        df (pd.DataFrame): The DataFrame containing the data.
-        dttm_columns (str or list): A column name or list of column names to standardize.
-    
-    Returns:
-        pd.DataFrame: DataFrame with standardized datetime columns.
-    """
-    if isinstance(dttm_columns, str):
-        dttm_columns = [dttm_columns]  # Convert single column name to list
 
-    for col in dttm_columns:
-        if col in df.columns:
-            # Convert to datetime if not already
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-            # Check if timezone-aware
-            if df[col].dt.tz is None:
-                df[col] = df[col].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='shift_forward')
-            else:
-                df[col] = df[col].dt.tz_convert('UTC')
-            # Remove timezone and convert to standard format
-            df[col] = df[col].dt.tz_convert(None)
-        else:
-            print(f"Couldn't find {col} column in this df")
-    return df
-
-def deftime(df):
-    # Count entries with both hours and minutes
-    has_hr_min = df.notna() & (df.dt.hour.notna() & df.dt.minute.notna())
-    count_with_hr_min = has_hr_min.sum()
-
-    # Count entries without hours and minutes
-    count_without_hr_min = (~has_hr_min).sum()
-
-    # Print the results
-    print(f"Count with hours and minutes: {count_with_hr_min}")
-    print(f"Count without hours and minutes: {count_without_hr_min}")
 
 def count_unique_encounters(df, encounter_column='hospitalization_id'):
     """
@@ -247,6 +202,7 @@ def map_race_column(df, race_column='race'):
     """
     # Define the mapping
     race_mapping = {
+        'Black or African-American': 'Black',
         'Black or African American': 'Black',
         'White': 'White',
         'Asian': 'Other',
@@ -710,9 +666,9 @@ def generate_table_one(final_df, filename):
 
     # Select relevant columns
     columns_to_keep = [
-        'hospitalization_id', 'encounter_block', 'recorded_date', 'recorded_hour', 
-        'patel_flag', 'team_flag', 'any_yellow_or_green_no_red', 'all_green', 
-        'all_green_no_red', 'any_green', 'ne_calc_min', 'max_peep_set', 'min_fio2_set'
+        'hospitalization_id', 'encounter_block', 'recorded_date', 'recorded_hour', 'all_green',
+        'patel_flag', 'team_flag', 'any_yellow_or_green_no_red', 'ne_calc_min', 
+        'max_peep_set', 'min_fio2_set'
     ]
     
     final_df_table1 = final_df[columns_to_keep]
@@ -737,9 +693,7 @@ def generate_table_one(final_df, filename):
         'Patel Criteria': 'patel_flag',
         'TEAM Criteria': 'team_flag',
         'Yellow Criteria': 'any_yellow_or_green_no_red',
-        'All Green Criteria': 'all_green',
-        'All Green No Red Criteria': 'all_green_no_red',
-        'Any Green Criteria': 'any_green'
+        'Green Criteria': 'all_green'
     }
 
     # Create criteria-based subsets
@@ -769,8 +723,8 @@ def generate_table_one(final_df, filename):
     # Remove 'Overall' column
     table1_check = table1_df.drop(columns=[('Grouped by Criteria', 'Overall')])
     # Rename the MultiIndex columns
-    new_column_names = ['Characteristics', 'Category', 'All Encounters', 'All Green Criteria', 'All Green No Red Criteria', 
-                        'Any Green Criteria', 'Patel Criteria', 'TEAM Criteria', 'Yellow Criteria'] 
+    new_column_names = ['Characteristics', 'Category', 'All Encounters', 
+                         'Patel Criteria', 'TEAM Criteria', 'Yellow Criteria', 'Green Criteria'] 
     table1_check.columns = new_column_names
     # Save to CSV
     # Construct the output path using the filename provided
@@ -780,4 +734,382 @@ def generate_table_one(final_df, filename):
 
     return table1_check
 
+def generate_table_one_new(final_df, all_ids_w_outcome, filename):
+    """
+    Generate Table 1 including mortality statistics and SOFA components.
+    """
+    # Load patient and hospitalization data
+    patient = load_data('clif_patient')
+    hospitalization = load_data('clif_hospitalization')
+
+    # Ensure ID columns are strings
+    hospitalization['hospitalization_id'] = hospitalization['hospitalization_id'].astype(str)
+    patient['patient_id'] = patient['patient_id'].astype(str)
+    all_ids_w_outcome['hospitalization_id'] = all_ids_w_outcome['hospitalization_id'].astype(str)
+
+    # Remove duplicates
+    patient = remove_duplicates(patient, ['patient_id'], 'patient')
+    hospitalization = remove_duplicates(hospitalization, ['hospitalization_id'], 'hospitalization')
+
+    # Select relevant columns including SOFA components
+    columns_to_keep = [
+        'hospitalization_id', 'encounter_block', 'recorded_date', 'recorded_hour', 'all_green',
+        'patel_flag', 'team_flag', 'any_yellow_or_green_no_red', 'ne_calc_min', 
+        'max_peep_set', 'min_fio2_set',
+        'sofa_cv_97', 'sofa_coag', 'sofa_renal', 'sofa_liver', 'sofa_resp', 'sofa_cns', 'sofa_total'  # Added SOFA components
+    ]
+    
+    final_df_table1 = final_df[columns_to_keep]
+
+    # Merge with patient, hospitalization, and mortality data
+    final_df_table1 = pd.merge(final_df_table1, hospitalization, how='left', on='hospitalization_id')
+    final_df_table1 = pd.merge(final_df_table1, patient, how='left', on='patient_id')
+    final_df_table1 = pd.merge(
+        final_df_table1, 
+        all_ids_w_outcome[['hospitalization_id', 'is_dead']], 
+        how='left', 
+        on='hospitalization_id'
+    )
+
+    # Map race column
+    final_df_table1 = map_race_column(final_df_table1, 'race_category')
+
+    # Define categorical and continuous variables
+    categorical = ['sex_category', 'race_new', 'ethnicity_category', 'is_dead']
+    continuous = ['age_at_admission']
+
+    # Add SOFA components to continuous variables
+    sofa_components = ['sofa_cv_97', 'sofa_coag', 'sofa_renal', 'sofa_liver', 'sofa_resp', 'sofa_cns', 'sofa_total']
+    continuous += sofa_components
+
+    # Include additional continuous variables if they exist
+    additional_continuous = ['ne_calc_min', 'max_peep_set', 'min_fio2_set']
+    continuous += [var for var in additional_continuous if var in final_df_table1.columns]
+
+    # Define criteria-based subsets
+    criteria_dict = {
+        'Patel Criteria': 'patel_flag',
+        'TEAM Criteria': 'team_flag',
+        'Yellow Criteria': 'any_yellow_or_green_no_red',
+        'Green Criteria': 'all_green'
+    }
+
+    # First, let's print the counts for verification
+    print("Counts before concatenation:")
+    print(f"All Encounters: {len(final_df_table1)}")
+    print(f"Patel Criteria (patel_flag=1): {len(final_df_table1[final_df_table1['patel_flag'] == 1])}")
+    print(f"TEAM Criteria (team_flag=1): {len(final_df_table1[final_df_table1['team_flag'] == 1])}")
+    print(f"Yellow Criteria (any_yellow_or_green_no_red=1): {len(final_df_table1[final_df_table1['any_yellow_or_green_no_red'] == 1])}")
+    print(f"Green Criteria (all_green=1): {len(final_df_table1[final_df_table1['all_green'] == 1])}")
+
+    all_encounters = final_df_table1.assign(Criteria='All Encounters')
+    patel_subset = final_df_table1[final_df_table1['patel_flag'] == 1].assign(Criteria='Patel Criteria')
+    team_subset = final_df_table1[final_df_table1['team_flag'] == 1].assign(Criteria='TEAM Criteria')
+    yellow_subset = final_df_table1[final_df_table1['any_yellow_or_green_no_red'] == 1].assign(Criteria='Yellow Criteria')
+    green_subset = final_df_table1[final_df_table1['all_green'] == 1].assign(Criteria='Green Criteria')
+
+    print("\nCounts after subset creation:")
+    print(f"All Encounters: {len(all_encounters)}")
+    print(f"Patel Subset: {len(patel_subset)}")
+    print(f"TEAM Subset: {len(team_subset)}")
+    print(f"Yellow Subset: {len(yellow_subset)}")
+    print(f"Green Subset: {len(green_subset)}")
+    
+    # Combine all subsets
+    combined_df = pd.concat([
+        all_encounters,
+        patel_subset,
+        team_subset,
+        yellow_subset,
+        green_subset
+    ], ignore_index=True)
+
+    # Remove duplicates to ensure each hospitalization_id appears only once per criteria
+    combined_df = combined_df.drop_duplicates(subset=['hospitalization_id', 'Criteria'])
+
+    # Create TableOne with nonnormal argument for SOFA components
+    table1 = TableOne(
+        combined_df,
+        columns=categorical + continuous,
+        categorical=categorical,
+        groupby='Criteria',
+        nonnormal=sofa_components,  # Specify SOFA components as nonnormal to get median and IQR
+        pval=False,
+        missing=False
+    )
+
+    # Convert TableOne object to DataFrame
+    table1_df = table1.tableone.reset_index()
+
+    # Remove 'Overall' column
+    table1_check = table1_df.drop(columns=[('Grouped by Criteria', 'Overall')])
+    
+    # Rename the MultiIndex columns
+    new_column_names = ['Characteristics', 'Category', 'All Encounters', 
+                       'Patel Criteria', 'TEAM Criteria', 'Yellow Criteria', 'Green Criteria'] 
+    table1_check.columns = new_column_names
+
+    # Format mortality rows to show as n (%)
+    mortality_rows = table1_check[table1_check['Characteristics'] == 'is_dead']
+    for col in new_column_names[2:]:  # Skip 'Characteristics' and 'Category' columns
+        total = combined_df[combined_df['Criteria'] == col]['is_dead'].count()
+        deaths = combined_df[(combined_df['Criteria'] == col) & (combined_df['is_dead'] == True)]['is_dead'].count()
+        percentage = (deaths / total * 100) if total > 0 else 0
+        mortality_rows.loc[mortality_rows['Category'] == '1', col] = f"{deaths} ({percentage:.1f}%)"
+
+    # Replace the original mortality rows
+    table1_check.loc[table1_check['Characteristics'] == 'is_dead'] = mortality_rows
+
+    # Rename rows for better clarity
+    table1_check.loc[table1_check['Characteristics'] == 'is_dead', 'Characteristics'] = 'Mortality'
+    table1_check.loc[table1_check['Category'] == '1', 'Category'] = ''
+
+    # Save to CSV
+    output_path = f'../output/final/{filename}_{helper["site_name"]}_{datetime.now().date()}.csv'
+    table1_check.to_csv(output_path, index=False)
+    print(f"TableOne saved to {output_path}")
+
+    return table1_check
+
+## meds dose conversion helpers
+
+# Define medications and their unit conversion information
+meds_list = [
+    "norepinephrine", "epinephrine", "phenylephrine",
+    "vasopressin", "dopamine", "angiotensin", "metaraminol", "dobutamine"
+]
+
+med_unit_info = {
+    'norepinephrine': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['mcg/kg/min', 'mcg/kg/hr', 'mg/kg/hr', 'mcg/min', 'mg/hr'],
+    },
+    'epinephrine': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['mcg/kg/min', 'mcg/kg/hr', 'mg/kg/hr', 'mcg/min', 'mg/hr'],
+    },
+    'phenylephrine': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['mcg/kg/min', 'mcg/kg/hr', 'mg/kg/hr', 'mcg/min', 'mg/hr'],
+    },
+    'dopamine': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['mcg/kg/min', 'mcg/kg/hr', 'mg/kg/hr', 'mcg/min', 'mg/hr'],
+    },
+    'dobutamine': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['mcg/kg/min', 'mcg/kg/hr', 'mg/kg/hr', 'mcg/min', 'mg/hr'],
+    },
+    'metaraminol': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['mg/hr', 'mcg/min'],
+    },
+    'angiotensin': {
+        'required_unit': 'mcg/kg/min',
+        'acceptable_units': ['ng/kg/min', 'ng/kg/hr'],
+    },
+    'vasopressin': {
+        'required_unit': 'units/min',
+        'acceptable_units': ['units/min', 'units/hr', 'milliunits/min', 'milliunits/hr'],
+    },
+}
+
+def check_dose_unit(row):
+    med_category = row['med_category']
+    med_dose_unit = row['med_dose_unit']
+    # Check if med_category exists in med_unit_info
+    if med_category in med_unit_info:
+        # Check if med_dose_unit is in the acceptable units
+        if med_dose_unit in med_unit_info[med_category]['acceptable_units']:
+            return "Valid"
+        else:
+            return "Not an acceptable unit"
+    else:
+        return "Not a vasoactive"
+    
+def has_per_hour_or_min(unit):
+    if pd.isnull(unit):
+        return False
+    unit = unit.lower()
+    return '/hr' in unit or '/min' in unit
+
+import numpy as np
+import pandas as pd          # <- make sure this was imported
+
+def get_conversion_factor(med_category: str,
+                          med_dose_unit: str,
+                          weight_kg: Union[float, None]) -> Union[float, None]:
+    """
+    Return a multiplier that converts *med_dose* from its current unit
+    to the **required** unit for that medication.
+
+    For units that need weight (mcg/min  → mcg/kg/min, mg/hr → mcg/kg/min …)
+    we return *None* when weight_kg is missing so that the caller can decide
+    what to do (keep the row with NaN, drop it, etc.).
+    """
+    med_info = med_unit_info.get(med_category)
+    if med_info is None:
+        return None                          # not a vaso we care about
+
+    med_dose_unit = (med_dose_unit or "").lower()
+
+    # ── helpers ───────────────────────────────────────────────
+    has_weight = weight_kg is not None and not pd.isna(weight_kg)
+    def w_needed(factor_if_known):
+        return factor_if_known if has_weight else None
+    # ──────────────────────────────────────────────────────────
+
+    if med_category in ["norepinephrine", "epinephrine",
+                        "phenylephrine", "dopamine",
+                        "dobutamine", "metaraminol"]:
+        if med_dose_unit == "mcg/kg/min": return 1.0
+        elif med_dose_unit == "mcg/kg/hr": return 1/60
+        elif med_dose_unit == "mg/kg/hr": return 1000/60
+        elif med_dose_unit == "mcg/min": return w_needed(1/weight_kg)
+        elif med_dose_unit == "mg/hr": return w_needed(1000/60/weight_kg)
+    elif med_category == "angiotensin":
+        if med_dose_unit == "ng/kg/min": return 1/1_000
+        elif med_dose_unit == "ng/kg/hr": return 1/1_000/60
+    elif med_category == "vasopressin":
+        if med_dose_unit == "units/min": return 1.0
+        elif med_dose_unit == "units/hr": return 1/60
+        elif med_dose_unit == "milliunits/min": return 1/1_000
+        elif med_dose_unit == "milliunits/hr": return 1/1_000/60
+
+    return None                               # unit not recognised
+
+
+def convert_dose(row: pd.Series) -> Union[float, None]:
+    """
+    Convert `row.med_dose` to the medication's **required** unit.
+
+    Returns `np.nan` when:
+    * the unit is unrecognised
+    * weight is required but missing
+    """
+    factor = get_conversion_factor(
+        row["med_category"],
+        row["med_dose_unit"],
+        row["weight_kg"]
+    )
+    return np.nan if factor is None else round(row["med_dose"] * factor, 5)
+
+
+def categorize_device(row):
+    if pd.notna(row['device_category']):
+        return row['device_category']
+    elif row['mode_category'] in ["simv", "pressure-regulated volume control", "assist control-volume control"]:
+        return "vent"
+    elif pd.isna(row['device_category']) and row['fio2_set'] == 0.21 and pd.isna(row['lpm_set']) and pd.isna(row['peep_set']) and pd.isna(row['tidal_volume_set']):
+        return "room air"
+    elif pd.isna(row['device_category']) and pd.isna(row['fio2_set']) and row['lpm_set'] == 0 and pd.isna(row['peep_set']) and pd.isna(row['tidal_volume_set']):
+        return "room air"
+    elif pd.isna(row['device_category']) and pd.isna(row['fio2_set']) and (0 < row['lpm_set'] <= 20) and pd.isna(row['peep_set']) and pd.isna(row['tidal_volume_set']):
+        return "nasal cannula"
+    elif pd.isna(row['device_category']) and pd.isna(row['fio2_set']) and row['lpm_set'] > 20 and pd.isna(row['peep_set']) and pd.isna(row['tidal_volume_set']):
+        return "high flow nc"
+    elif row['device_category'] == "nasal cannula" and pd.isna(row['fio2_set']) and row['lpm_set'] > 20:
+        return "high flow nc"
+    else:
+        return row['device_category']  # Keep original value if no condition is met
+
+# Try to fill in FiO2 based on other values    
+def refill_fio2(row):
+    if pd.notna(row['fio2_set']):
+        return row['fio2_set']/100
+    elif pd.isna(row['fio2_set']) and row['device_category'] == "room air":
+        return 0.21 
+    elif pd.isna(row['fio2_set']) and row['device_category'] == "nasal cannula" and pd.notna(row['lpm_set']):
+        return (0.24 + (0.04 * row['lpm_set'])) 
+    else:
+        return np.nan
+
+def merge_multiple_dfs(*dfs, on=None, how='outer'):
+    """
+    Merge multiple DataFrames on specified columns.
+    Args:
+        *dfs: Variable number of DataFrames to merge
+        on: Column(s) to merge on
+        how: Type of merge to perform
+    Returns:
+        Merged DataFrame
+    """
+    return reduce(lambda left, right: pd.merge(left, right, on=on, how=how), dfs)
+
+# Example usage:
+# dose_pivot = merge_multiple_dfs(dose_pivot_min, dose_pivot_max, dose_pivot_first, dose_pivot_last, 
+#                               on=['encounter_block', 'recorded_date', 'recorded_hour'], 
+#                               how='outer')
+
+import pandas as pd
+
+def build_meds_hourly_scaffold(
+    meds_df: pd.DataFrame,
+    *,
+    id_col: str = "encounter_block",
+    ids=None,
+    timestamp_col: str = "admin_dttm",
+    site_tz: str = "US/Central",          # ← local zone you want in the result
+) -> pd.DataFrame:
+    """
+    For every encounter block create a *single* row for every LOCAL hour
+    from the first to the last observation (inclusive).
+
+    Parameters
+    ----------
+    meds_df : DataFrame  - must contain `id_col` and `timestamp_col`
+    ids     : iterable   - optional list of blocks to keep
+    site_tz : str        - Olson tz name for the local timezone wanted
+                         - in the output (e.g. 'US/Central')
+
+    Returns
+    -------
+    DataFrame with columns
+        id_col · recorded_date · recorded_hour
+    (no duplicates).
+    """
+
+    # ── 0 · optional filtering ─────────────────────────────────────────
+    if ids is not None:
+        meds_df = meds_df.loc[meds_df[id_col].isin(ids)].copy()
+    if meds_df.empty:
+        raise ValueError("After filtering no rows remain.")
+
+    # ensure timezone‑aware UTC for safe arithmetic
+    meds_df = meds_df[[id_col, timestamp_col]].copy()
+    meds_df[timestamp_col] = pd.to_datetime(meds_df[timestamp_col], utc=True)
+
+    # drop exact‑timestamp duplicates up‑front (keep first)
+    meds_df = meds_df.drop_duplicates(subset=[id_col, timestamp_col],
+                                      keep="first")
+
+    # ── 1 · build the UTC scaffold ─────────────────────────────────────
+    scaffolds = []
+    for blk, g in meds_df.groupby(id_col, sort=False):
+        start = g[timestamp_col].min().floor("h")
+        end   = g[timestamp_col].max().floor("h")       # SAME hour as last obs
+        hrs   = pd.date_range(start, end, freq="h", tz="UTC")
+        scaffolds.append(pd.DataFrame({id_col: blk, timestamp_col: hrs}))
+
+    scaffold = pd.concat(scaffolds, ignore_index=True)
+
+    # ── 2 · merge scaffold ←→ original rows (left join) ────────────────
+    out = (scaffold
+           .merge(meds_df, on=[id_col, timestamp_col], how="left")
+           .sort_values([id_col, timestamp_col])
+           .reset_index(drop=True))
+    out[timestamp_col] = pd.to_datetime(out[timestamp_col], utc=True)
+    # ── 3 · convert to LOCAL time & derive date + hour ─────────────────
+    out["local_time"]   = out[timestamp_col].dt.tz_convert(site_tz)
+    out["recorded_date"] = out["local_time"].dt.date
+    out["recorded_hour"] = out["local_time"].dt.hour
+
+    # ── 4 · drop the duplicate LOCAL hour created by DST fall‑back ────
+    out = (out
+           .drop_duplicates(subset=[id_col, "recorded_date", "recorded_hour"],
+                            keep="first")
+           .loc[:, [id_col, "recorded_date", "recorded_hour"]]
+           .reset_index(drop=True))
+
+    return out
 
