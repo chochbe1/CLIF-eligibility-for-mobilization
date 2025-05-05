@@ -582,7 +582,7 @@ def compute_sofa(ids_w_dttm:pd.DataFrame,
     try:
         crrt = pyCLIF.load_data('clif_crrt_therapy')
         crrt['hospitalization_id'] = crrt['hospitalization_id'].astype(str)
-        crrt = pyCLIF.convert_datetime_columns_to_site_tz(crrt, pyCLIF.helper['your_site_timezone'])
+        crrt = pyCLIF.convert_datetime_columns_to_site_tz(crrt, pyCLIF.helper['timezone'])
         logger.info("Loaded %d CRRT rows", len(crrt))
 
         # 2. Filter gcs within start and stop times

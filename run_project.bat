@@ -1,57 +1,82 @@
 @echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-set "EXITCODE=0"
 
-REM Function to handle errors
-:handle_error
-echo ❌ ERROR during: %1
-exit /b 1
+:: ── Colors (Only for aesthetics in some terminals) ──
+set "YELLOW====="
+set "CYAN=>>>>>>"
+set "GREEN=++++++"
 
-REM Step 0: Navigate to script directory (project root)
-cd /d %~dp0 || call :handle_error "changing to script directory"
+:: ── Function: separator ──
+call :separator
 
-REM Step 1: Create virtual environment if it doesn't exist
+:: ── 1. Create virtual environment ──
 if not exist ".mobilization\" (
-    echo Creating virtual environment...
-    python -m venv .mobilization || call :handle_error "creating virtual environment"
+    echo %CYAN% Creating virtual environment (.mobilization)...
+    python -m venv .mobilization
+) else (
+    echo %CYAN% Virtual environment already exists.
 )
 
-REM Step 2: Activate virtual environment
-call .mobilization\Scripts\activate.bat || call :handle_error "activating virtual environment"
+:: ── 2. Activate virtual environment ──
+call :separator
+echo %CYAN% Activating virtual environment...
+call .mobilization\Scripts\activate.bat
 
-REM Step 3: Install dependencies
-echo Installing Python dependencies...
-pip install --quiet -r requirements.txt || call :handle_error "installing from requirements.txt"
-pip install --quiet jupyter ipykernel papermill || call :handle_error "installing jupyter/ipykernel/papermill"
+:: ── 3. Upgrade pip ──
+call :separator
+echo %CYAN% Upgrading pip...
+python -m pip install --upgrade pip
 
-REM Step 4: Register Jupyter kernel
-python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)" || call :handle_error "registering Jupyter kernel"
+:: ── 4. Install dependencies ──
+call :separator
+echo %CYAN% Installing dependencies...
+pip install --quiet -r requirements.txt
+pip install --quiet jupyter ipykernel
 
-REM Step 5: Set environment variables
-set PYTHONWARNINGS=ignore
-set PYTHONPATH=%cd%\code;%PYTHONPATH%
+:: ── 5. Register Jupyter kernel ──
+call :separator
+echo %CYAN% Registering Jupyter kernel...
+python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)"
 
-REM Step 6: Change to code directory
-cd code || call :handle_error "changing to code directory"
+:: ── 6. Change to code directory ──
+call :separator
+echo %CYAN% Changing to code directory...
+cd code
+if errorlevel 1 (
+    echo ❌ 'code' directory not found.
+    exit /b 1
+)
 
-REM Step 7: Create logs directory if not exists
+:: ── 7. Convert and execute notebooks, streaming + logging ──
 if not exist logs (
-    mkdir logs || call :handle_error "creating logs directory"
+    mkdir logs
 )
 
-REM Step 8: Run Python notebooks and log outputs
-echo Running 01_cohort_identification...
-papermill 01_cohort_identification.ipynb nul > logs\01_cohort_identification.log 2>&1
-if %errorlevel% neq 0 call :handle_error "01_cohort_identification.ipynb"
+set NOTEBOOKS=01_cohort_identification.ipynb 02_mobilization_analysis.ipynb
 
-echo Running 02_mobilization_analysis...
-papermill 02_mobilization_analysis.ipynb nul > logs\02_mobilization_analysis.log 2>&1
-if %errorlevel% neq 0 call :handle_error "02_mobilization_analysis.ipynb"
+for %%N in (%NOTEBOOKS%) do (
+    call :separator
+    set "NB=%%N"
+    set "BASE=%%~nN"
+    set "LOG=logs\!BASE!.log"
+    echo %CYAN% Executing %%N and logging output to !LOG!...
+    set MPLBACKEND=Agg
+    jupyter nbconvert --to script --stdout "%%N" | python > "!LOG!" 2>&1
+)
 
-REM Step 9: Run R script and log output
-echo Running 03_competing_risk_analysis.R...
+:: ── 8. Run R script ──
+call :separator
+echo %CYAN% Running R script: 03_competing_risk_analysis.R...
 Rscript 03_competing_risk_analysis.R > logs\03_competing_risk_analysis.log 2>&1
-if %errorlevel% neq 0 call :handle_error "03_competing_risk_analysis.R"
 
-echo ✅ All setup and analysis scripts completed!
+:: ── 9. Done ──
+call :separator
+echo %GREEN% ✅ All setup and analysis scripts completed successfully!
+
+pause
 exit /b 0
+
+:: ── Function: separator ──
+:separator
+echo ==================================================
+exit /b
