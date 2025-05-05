@@ -82,7 +82,7 @@ results <- lapply(names(paths), \(nm) analyse_one(
 ))
 
 ## 4·a  overlay plot (base graphics) --------------------------------------
-png(file.path(out_dir, "cif_overlay.png"), width = 1800, height = 1200, res = 200)
+png(file.path(out_dir,"graphs", "cif_overlay.png"), width = 1800, height = 1200, res = 200)
 cols <- c(Patel="maroon", TEAM="blue", Yellow="darkgoldenrod1", Green="darkgreen")
 
 plot(results[[1]]$fit$`1 1`$time, results[[1]]$fit$`1 1`$est,

@@ -85,6 +85,7 @@ def compute_sofa(ids_w_dttm:pd.DataFrame,
     }
     labs = pyCLIF.load_data('clif_labs', columns=labs_required_columns, filters=labs_filters)
     labs = pyCLIF.convert_datetime_columns_to_site_tz(labs, pyCLIF.helper['timezone'])
+    labs['lab_value_numeric'] = pd.to_numeric(labs['lab_value_numeric'], errors='coerce')
     labs = labs.dropna(subset=['lab_value_numeric'])
     logger.info("Loaded %d lab rows", len(labs))
 
@@ -148,6 +149,7 @@ def compute_sofa(ids_w_dttm:pd.DataFrame,
                     filters={'hospitalization_id':hosp_list,
                                 'vital_category': vital_cats})
     vitals = pyCLIF.convert_datetime_columns_to_site_tz(vitals, pyCLIF.helper['timezone'])
+    vitals['vital_value'] = pd.to_numeric(vitals['vital_value'], errors='coerce')
     logger.info("Loaded %d vitals rows", len(vitals))
     vital_thresholds = {
     'map': (30, float('inf')),    # MAP ≥ 30
