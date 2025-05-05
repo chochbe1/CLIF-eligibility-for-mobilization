@@ -64,14 +64,14 @@ project_root <- normalizePath(getwd())
 
 # Define input parquet paths relative to root
 paths <- list(
-  Patel  = file.path(project_root, "output", "intermediate", "competing_risk_patel_final.parquet"),
-  TEAM   = file.path(project_root, "output", "intermediate", "competing_risk_team_final.parquet"),
-  Yellow = file.path(project_root, "output", "intermediate", "competing_risk_yellow_final.parquet"),
-  Green  = file.path(project_root, "output", "intermediate", "competing_risk_green_final.parquet")
+  Patel  = file.path(project_root,"..", "output", "intermediate", "competing_risk_patel_final.parquet"),
+  TEAM   = file.path(project_root,"..", "output", "intermediate", "competing_risk_team_final.parquet"),
+  Yellow = file.path(project_root,"..", "output", "intermediate", "competing_risk_yellow_final.parquet"),
+  Green  = file.path(project_root,"..", "output", "intermediate", "competing_risk_green_final.parquet")
 )
 
 # Define output directory and create it if missing
-out_dir <- file.path(project_root, "output", "final")
+out_dir <- file.path(project_root,"..", "output", "final")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 ## 4 ── CIF analysis ------------------------------------------------------

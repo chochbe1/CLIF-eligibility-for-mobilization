@@ -24,9 +24,14 @@ clif_*.fst
 # ignore the venv
 .mobilization
 
-# all files under intermediate folder
-output/intermediate/
-output/final/
+# all files under intermediate and final folder
+# all data files and results
+*.csv
+*.fst
+*.parquet
+*.png
+subhazard_summary.json
+
 
 output_old/
 code/logs/
