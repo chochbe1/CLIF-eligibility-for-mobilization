@@ -14,15 +14,21 @@ from functools import reduce
 conn = duckdb.connect(database=':memory:')
 
 def load_config():
-    json_path = '../config/config.json'
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    json_path = os.path.join(project_root, 'config', 'config.json')
     
     with open(json_path, 'r') as file:
         config = json.load(file)
-    print("Loaded configuration from config.json")
-    
+    print("✅ Loaded configuration from config.json")
     return config
 
 helper = load_config()
+
+def _cast_id_cols_to_string(df):
+    id_cols = [c for c in df.columns if c.endswith("_id")]
+    if id_cols:                                   # no-op if none found
+        df[id_cols] = df[id_cols].astype("string")
+    return df
 
 def load_parquet_with_tz(file_path, columns=None, filters=None, sample_size=None):
     con = duckdb.connect()
@@ -47,6 +53,7 @@ def load_parquet_with_tz(file_path, columns=None, filters=None, sample_size=None
 
     df = con.execute(query).fetchdf()            # pandas DataFrame
     con.close()
+    df = _cast_id_cols_to_string(df)         # cast id columns to string
     return df
 
 def load_data(table, sample_size=None, columns=None, filters=None):
@@ -99,6 +106,7 @@ def load_data(table, sample_size=None, columns=None, filters=None):
         else:
             raise ValueError("Unsupported filetype. Only 'csv' and 'parquet' are supported.")
         print(f"Data loaded successfully from {file_path}")
+        df = _cast_id_cols_to_string(df) # Cast id columns to string
         return df
     else:
         raise FileNotFoundError(f"The file {file_path} does not exist in the specified directory.")
@@ -1119,4 +1127,52 @@ def build_meds_hourly_scaffold(
            .reset_index(drop=True))
 
     return out
+
+
+def extend_hourly_dataset(base_df, addon_df, merge_cols):
+    """
+    Extend `base_df` with additional rows from `addon_df` beyond the last hour recorded per encounter_block.
+    
+    Parameters
+    ----------
+    base_df : pd.DataFrame
+        Main dataset that contains all expected hours.
+    addon_df : pd.DataFrame
+        Dataset with potentially additional rows that need to be appended after the last timestamp in base_df.
+    merge_cols : list
+        Columns to join on, usually: ['encounter_block', 'recorded_date', 'recorded_hour']
+    
+    Returns
+    -------
+    pd.DataFrame
+        Combined DataFrame with original base rows + extra addon rows after the last timepoint in base.
+    """
+
+    # Step 1: Reconstruct timestamps
+    base_df = base_df.copy()
+    addon_df = addon_df.copy()
+    
+    base_df['recorded_dttm'] = pd.to_datetime(base_df['recorded_date']) + pd.to_timedelta(base_df['recorded_hour'], unit='h')
+    addon_df['recorded_dttm'] = pd.to_datetime(addon_df['recorded_date']) + pd.to_timedelta(addon_df['recorded_hour'], unit='h')
+
+    # Step 2: Merge addon onto base
+    merged = pd.merge(base_df, addon_df.drop(columns='recorded_dttm', errors='ignore'), on=merge_cols, how='left')
+
+    # Step 3: Get last recorded_dttm per encounter_block
+    max_times = base_df.groupby('encounter_block')['recorded_dttm'].max().reset_index(name='max_seq_dttm')
+
+    # Step 4: Get extra rows from addon_df
+    extra_candidates = pd.merge(addon_df, max_times, on='encounter_block', how='left')
+    extra_rows = extra_candidates[extra_candidates['recorded_dttm'] > extra_candidates['max_seq_dttm']].drop(
+        columns=['recorded_dttm', 'max_seq_dttm']
+    )
+
+    # Step 5: Combine base + extra
+    combined_df = pd.concat([merged, extra_rows], ignore_index=True)
+
+    # Step 6: Clean up
+    combined_df = combined_df.drop(columns='recorded_dttm', errors='ignore')
+    combined_df = combined_df.sort_values(merge_cols).reset_index(drop=True)
+
+    return combined_df
 

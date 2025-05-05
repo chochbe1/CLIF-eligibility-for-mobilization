@@ -57,6 +57,17 @@ setup.bat
 
 2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
 
+## Analysis
+
+The analysis is performed in the `code/` directory. 
+To run the analysis, execute the following command in the terminal:
+
+```bash
+cd code
+bash run_analysis.sh
+```
+
+
 
 
 ## References

@@ -29,6 +29,5 @@ output/intermediate/
 output/final/
 
 output_old/
-code/03_competing_risk_mobilization.qmd
-
+code/logs/
 package-lock.json

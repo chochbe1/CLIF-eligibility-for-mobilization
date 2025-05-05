@@ -145,7 +145,7 @@ def process_resp_support_waterfall(
         rs["device_category"].isna()
         & rs["device_name"].isna()
         & rs["mode_category"].str.contains(
-            r"(assist control-volume control|simv|pressure control)", na=False
+            r"(?:assist control-volume control|simv|pressure control)", na=False
         )
     )
     rs.loc[mask, ["device_category", "device_name"]] = ["imv", most_common_imv_name]
@@ -272,7 +272,7 @@ def process_resp_support_waterfall(
     rs["device_name"] = (
         rs.sort_values("recorded_dttm")
         .groupby([id_col, "device_cat_id"])["device_name"]
-        .transform(lambda s: s.ffill().bfill())
+        .transform(lambda s: s.ffill().bfill()).infer_objects(copy=False)
     )
     rs["device_id"] = change_id(rs["device_name"], rs[id_col])
 
@@ -280,7 +280,7 @@ def process_resp_support_waterfall(
     rs = rs.sort_values([id_col, "recorded_dttm"])
     rs["mode_category"] = (
         rs.groupby([id_col, "device_id"])["mode_category"]
-        .transform(lambda s: s.ffill().bfill())
+        .transform(lambda s: s.ffill().bfill()).infer_objects(copy=False)
     )
     dev_curr = rs["device_id"]
     dev_prev = rs.groupby(id_col)["device_id"].shift()
@@ -292,7 +292,7 @@ def process_resp_support_waterfall(
     # 2-D  mode_name_id
     rs["mode_name"] = (
         rs.groupby([id_col, "mode_cat_id"])["mode_name"]
-        .transform(lambda s: s.ffill().bfill())
+        .transform(lambda s: s.ffill().bfill()).infer_objects(copy=False)
     )
     cat_curr = rs["mode_cat_id"]
     cat_prev = rs.groupby(id_col)["mode_cat_id"].shift()
@@ -341,7 +341,7 @@ def process_resp_support_waterfall(
             breaker = (g["device_category"] == "trach collar").cumsum()
             return (
                 g.groupby(breaker)[num_cols_fill]
-                .apply(lambda x: x.ffill().bfill())
+                .apply(lambda x: x.ffill().bfill()).infer_objects(copy=False)
             )
         return g[num_cols_fill].ffill().bfill()
 
