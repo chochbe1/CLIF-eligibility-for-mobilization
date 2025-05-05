@@ -234,6 +234,7 @@ def compute_sofa(ids_w_dttm:pd.DataFrame,
                     filters={'hospitalization_id':hosp_list,
                              'assessment_category':['gcs_total']})
     gcs = pyCLIF.convert_datetime_columns_to_site_tz(gcs, pyCLIF.helper['timezone'])
+    gcs['numerical_value'] = pd.to_numeric(gcs['numerical_value'], errors='coerce')
     logger.info("Loaded %d GCS rows", len(gcs))
 
     # 2. Filter gcs within start and stop times
@@ -585,7 +586,6 @@ def compute_sofa(ids_w_dttm:pd.DataFrame,
         crrt = pyCLIF.convert_datetime_columns_to_site_tz(crrt, pyCLIF.helper['timezone'])
         logger.info("Loaded %d CRRT rows", len(crrt))
 
-        # 2. Filter gcs within start and stop times
         # Merge with ids to get start and stop times
         crrt_sub = crrt.merge(
             ids, 
