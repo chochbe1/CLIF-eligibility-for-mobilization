@@ -30,7 +30,7 @@ The study period is from March 1, 2020, to March 31, 2022. The cohort consists o
 3. Update the `config.json` with site-specific settings.
 
 
-## Environment setup
+## Environment setup and project execution
 
 The environment setup code is provided in the `setup.sh` file for macOS and `setup.bat` for Windows.
 
@@ -38,12 +38,12 @@ The environment setup code is provided in the `setup.sh` file for macOS and `set
 
 1. Make the script executable: 
 ```bash
-chmod +x setup.sh
+chmod +x run_project.sh
 ```
 
 2. Run the script:
 ```bash
-./setup.sh
+./run_project.sh
 ```
 
 3. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
@@ -52,23 +52,8 @@ chmod +x setup.sh
 
 1. Run the script:
 ```bat
-setup.bat
+run_project.bat
 ```
-
-2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
-
-## Analysis
-
-The analysis is performed in the `code/` directory. 
-To run the analysis, execute the following command in the terminal:
-
-```bash
-cd code
-bash run_analysis.sh
-```
-
-
-
 
 ## References
 
