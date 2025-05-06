@@ -1056,7 +1056,6 @@ def merge_multiple_dfs(*dfs, on=None, how='outer'):
 #                               on=['encounter_block', 'recorded_date', 'recorded_hour'], 
 #                               how='outer')
 
-import pandas as pd
 
 def build_meds_hourly_scaffold(
     meds_df: pd.DataFrame,

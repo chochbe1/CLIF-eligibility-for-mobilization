@@ -84,3 +84,7 @@ Initial implementation.
 - Updated TEAM criteria to use **respiratory rate from vitals**, not respiratory support. Same as the other two criteria.
 - Pressor value logic now **always uses last recorded value** for the hour.
 - The sequence of hours starts with the **first hour of intubation** to the last recorded hour for vitals, labs, and medications.
+
+## Version 10 – May 5, 2025
+- Updated the Chicago and consensus criteria to use Average MAP instead of the min and max value of MAP.
+- Removed deprecated survival analysis code using Kaplan-Meier, superseded by competing risk framework on full patient timeline in 03 R script.
