@@ -72,6 +72,18 @@ def process_resp_support_waterfall(
     num_cols = [c for c in num_cols if c in rs.columns]
     rs[num_cols] = rs[num_cols].apply(pd.to_numeric, errors="coerce")
 
+    rs['fio2_set'] = pd.to_numeric(rs['fio2_set'], errors='coerce')
+    # (Optional) If FiO2 is >1 on average => scale by /100
+    fio2_mean = rs['fio2_set'].mean(skipna=True)
+    # If the mean is greater than 1, divide 'fio2_set' by 100
+    if fio2_mean and fio2_mean > 1.0:
+        # Only divide values greater than 1 to avoid re-dividing already correct values
+        rs.loc[rs['fio2_set'] > 1, 'fio2_set'] = \
+            rs.loc[rs['fio2_set'] > 1, 'fio2_set'] / 100
+        print("Updated fio2_set to be between 0.21 and 1")
+    else:
+        print("FIO2_SET mean=", fio2_mean, "is within the required range")
+
     # Helpers
     rs["recorded_date"] = rs["recorded_dttm"].dt.date
     rs["recorded_hour"] = rs["recorded_dttm"].dt.hour
