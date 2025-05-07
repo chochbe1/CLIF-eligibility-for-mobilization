@@ -31,7 +31,9 @@ clif_*.fst
 *.parquet
 *.png
 subhazard_summary.json
-
+subhazard_summary_72hrs.json
+fg_model_summary.txt
+fg_model_summary_72hrs.txt
 
 output_old/
 code/logs/

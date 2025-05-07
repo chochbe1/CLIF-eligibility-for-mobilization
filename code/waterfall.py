@@ -342,8 +342,10 @@ def process_resp_support_waterfall(
             return (
                 g.groupby(breaker)[num_cols_fill]
                 .apply(lambda x: x.ffill().bfill()).infer_objects(copy=False)
+                # .apply(lambda x: x.ffill()).infer_objects(copy=False)
             )
         return g[num_cols_fill].ffill().bfill()
+        # return g[num_cols_fill].ffill()
 
     rs[num_cols_fill] = (
         rs.groupby([id_col, "mode_name_id"], group_keys=False, sort=False)
@@ -366,8 +368,8 @@ def process_resp_support_waterfall(
         .sort_values([id_col, "recorded_dttm"])
         .reset_index(drop=True)
     )
-    rs = rs[~rs["is_scaffold"]] 
-    rs = rs.drop(columns="is_scaffold")
+    # rs = rs[~rs["is_scaffold"]] 
+    # rs = rs.drop(columns="is_scaffold")
 
     # Final columns to drop
     drop_cols = [

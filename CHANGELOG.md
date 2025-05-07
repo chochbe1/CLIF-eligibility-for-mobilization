@@ -1,10 +1,5 @@
 # CHANGELOG
 
-**Author:** Kaveri Chhikara  
-**Project:** CLIF Eligibility for Mobilization
-
----
-
 ## Version 1 – October 30, 2024
 
 Initial implementation.
@@ -86,5 +81,7 @@ Initial implementation.
 - The sequence of hours starts with the **first hour of intubation** to the last recorded hour for vitals, labs, and medications.
 
 ## Version 10 – May 5, 2025
-- Updated the Chicago and consensus criteria to use Average MAP instead of the min and max value of MAP.
+- Updated the Chicago/Patel and consensus criteria to use Average MAP instead of the min and max value of MAP.
 - Removed deprecated survival analysis code using Kaplan-Meier, superseded by competing risk framework on full patient timeline in 03 R script.
+- Added code to look at aggregates for the first 72 hours of intubation, and an additional TableOne for the first 72 hours. 
+- Sensitivity analysis for the weekend vs weekday eligibility still pending. 

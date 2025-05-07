@@ -49,8 +49,19 @@ echo Finished 02_mobilization_analysis.ipynb
 REM ── Step 9: Run R script ──
 echo.
 echo Running R script: 03_competing_risk_analysis.R ...
+
+where Rscript >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ Rscript not found. Please ensure R is installed and added to your PATH.
+    echo Exiting script.
+    exit /b 1
+)
+
 Rscript 03_competing_risk_analysis.R > logs\03_competing_risk_analysis.log
-echo Finished 03_competing_risk_analysis.R
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ Error running R script. Check logs\03_competing_risk_analysis.log for details.
+    exit /b 1
+)
 
 REM ── Step 10: Done ──
 echo.

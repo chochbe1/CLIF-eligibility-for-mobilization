@@ -1057,121 +1057,283 @@ def merge_multiple_dfs(*dfs, on=None, how='outer'):
 #                               how='outer')
 
 
+# def build_meds_hourly_scaffold(
+#     meds_df: pd.DataFrame,
+#     *,
+#     id_col: str = "encounter_block",
+#     ids=None,
+#     timestamp_col: str = "admin_dttm",
+#     site_tz: str = helper['timezone'] ,          # ← local zone you want in the result
+# ) -> pd.DataFrame:
+#     """
+#     For every encounter block create a *single* row for every LOCAL hour
+#     from the first to the last observation (inclusive).
+
+#     Parameters
+#     ----------
+#     meds_df : DataFrame  - must contain `id_col` and `timestamp_col`
+#     ids     : iterable   - optional list of blocks to keep
+#     site_tz : str        - Olson tz name for the local timezone wanted
+#                          - in the output (e.g. 'US/Central')
+
+#     Returns
+#     -------
+#     DataFrame with columns
+#         id_col · recorded_date · recorded_hour
+#     (no duplicates).
+#     """
+
+#     # ── 0 · optional filtering ─────────────────────────────────────────
+#     if ids is not None:
+#         meds_df = meds_df.loc[meds_df[id_col].isin(ids)].copy()
+#     if meds_df.empty:
+#         raise ValueError("After filtering no rows remain.")
+
+#     # ensure timezone‑aware UTC for safe arithmetic
+#     meds_df = meds_df[[id_col, timestamp_col]].copy()
+#     meds_df[timestamp_col] = pd.to_datetime(meds_df[timestamp_col], utc=True)
+
+#     # drop exact‑timestamp duplicates up‑front (keep first)
+#     meds_df = meds_df.drop_duplicates(subset=[id_col, timestamp_col],
+#                                       keep="first")
+
+#     # ── 1 · build the UTC scaffold ─────────────────────────────────────
+#     scaffolds = []
+#     for blk, g in meds_df.groupby(id_col, sort=False):
+#         start = g[timestamp_col].min().floor("h")
+#         end   = g[timestamp_col].max().floor("h")       # SAME hour as last obs
+#         hrs   = pd.date_range(start, end, freq="h", tz="UTC")
+#         scaffolds.append(pd.DataFrame({id_col: blk, timestamp_col: hrs}))
+
+#     scaffold = pd.concat(scaffolds, ignore_index=True)
+
+#     # ── 2 · merge scaffold ←→ original rows (left join) ────────────────
+#     out = (scaffold
+#            .merge(meds_df, on=[id_col, timestamp_col], how="left")
+#            .sort_values([id_col, timestamp_col])
+#            .reset_index(drop=True))
+#     out[timestamp_col] = pd.to_datetime(out[timestamp_col], utc=True)
+#     # ── 3 · convert to LOCAL time & derive date + hour ─────────────────
+#     out["local_time"]   = out[timestamp_col].dt.tz_convert(site_tz)
+#     out["recorded_date"] = out["local_time"].dt.date
+#     out["recorded_hour"] = out["local_time"].dt.hour
+
+#     # ── 4 · drop the duplicate LOCAL hour created by DST fall‑back ────
+#     out = (out
+#            .drop_duplicates(subset=[id_col, "recorded_date", "recorded_hour"],
+#                             keep="first")
+#            .loc[:, [id_col, "recorded_date", "recorded_hour"]]
+#            .reset_index(drop=True))
+
+#     return out
+
 def build_meds_hourly_scaffold(
-    meds_df: pd.DataFrame,
-    *,
-    id_col: str = "encounter_block",
-    ids=None,
-    timestamp_col: str = "admin_dttm",
-    site_tz: str = "US/Central",          # ← local zone you want in the result
+        meds_df: pd.DataFrame,
+        *,
+        id_col: str = "encounter_block",
+        ids=None,
+        timestamp_col: str = "admin_dttm",
+        site_tz: str = helper["timezone"]          # e.g. "US/Central"
 ) -> pd.DataFrame:
-    """
-    For every encounter block create a *single* row for every LOCAL hour
-    from the first to the last observation (inclusive).
-
-    Parameters
-    ----------
-    meds_df : DataFrame  - must contain `id_col` and `timestamp_col`
-    ids     : iterable   - optional list of blocks to keep
-    site_tz : str        - Olson tz name for the local timezone wanted
-                         - in the output (e.g. 'US/Central')
-
-    Returns
-    -------
-    DataFrame with columns
-        id_col · recorded_date · recorded_hour
-    (no duplicates).
-    """
-
-    # ── 0 · optional filtering ─────────────────────────────────────────
+    # ── 0 · filter ------------------------------------------------------
     if ids is not None:
         meds_df = meds_df.loc[meds_df[id_col].isin(ids)].copy()
     if meds_df.empty:
         raise ValueError("After filtering no rows remain.")
 
-    # ensure timezone‑aware UTC for safe arithmetic
-    meds_df = meds_df[[id_col, timestamp_col]].copy()
-    meds_df[timestamp_col] = pd.to_datetime(meds_df[timestamp_col], utc=True)
+    # ── 1 · ensure tz‑aware in the requested local zone ----------------
+    ts_local = pd.to_datetime(meds_df[timestamp_col])
+    if ts_local.dt.tz is None:
+        ts_local = ts_local.dt.tz_localize(site_tz, ambiguous="NaT",
+                                           nonexistent="shift_forward")
+    else:
+        ts_local = ts_local.dt.tz_convert(site_tz)
 
-    # drop exact‑timestamp duplicates up‑front (keep first)
-    meds_df = meds_df.drop_duplicates(subset=[id_col, timestamp_col],
-                                      keep="first")
+    meds_df = meds_df[[id_col]].copy()
+    meds_df["local_ts"] = ts_local
+    meds_df = meds_df.drop_duplicates([id_col, "local_ts"])
 
-    # ── 1 · build the UTC scaffold ─────────────────────────────────────
+    # ── 2 · scaffold (rounding done in UTC → no ambiguity) --------------
     scaffolds = []
     for blk, g in meds_df.groupby(id_col, sort=False):
-        start = g[timestamp_col].min().floor("h")
-        end   = g[timestamp_col].max().floor("h")       # SAME hour as last obs
-        hrs   = pd.date_range(start, end, freq="h", tz="UTC")
-        scaffolds.append(pd.DataFrame({id_col: blk, timestamp_col: hrs}))
+        # convert to UTC just for min/max/floor
+        utc = g["local_ts"].dt.tz_convert("UTC")
+        start_utc = utc.min().floor("h")
+        end_utc   = utc.max().floor("h")
+        hrs_utc   = pd.date_range(start_utc, end_utc, freq="h", tz="UTC")
+
+        hrs_local = hrs_utc.tz_convert(site_tz)   # back to local zone
+        scaffolds.append(pd.DataFrame({id_col: blk, "local_ts": hrs_local}))
 
     scaffold = pd.concat(scaffolds, ignore_index=True)
 
-    # ── 2 · merge scaffold ←→ original rows (left join) ────────────────
+    # ── 3 · merge scaffold ←→ original rows -----------------------------
     out = (scaffold
-           .merge(meds_df, on=[id_col, timestamp_col], how="left")
-           .sort_values([id_col, timestamp_col])
-           .reset_index(drop=True))
-    out[timestamp_col] = pd.to_datetime(out[timestamp_col], utc=True)
-    # ── 3 · convert to LOCAL time & derive date + hour ─────────────────
-    out["local_time"]   = out[timestamp_col].dt.tz_convert(site_tz)
-    out["recorded_date"] = out["local_time"].dt.date
-    out["recorded_hour"] = out["local_time"].dt.hour
-
-    # ── 4 · drop the duplicate LOCAL hour created by DST fall‑back ────
-    out = (out
-           .drop_duplicates(subset=[id_col, "recorded_date", "recorded_hour"],
-                            keep="first")
-           .loc[:, [id_col, "recorded_date", "recorded_hour"]]
+           .merge(meds_df, on=[id_col, "local_ts"], how="left")
+           .sort_values([id_col, "local_ts"])
            .reset_index(drop=True))
 
-    return out
+    # ── 4 · derive date/hour & drop duplicate local hours ---------------
+    out["recorded_date"] = out["local_ts"].dt.date
+    out["recorded_hour"] = out["local_ts"].dt.hour
 
+    out = out.drop_duplicates([id_col, "recorded_date", "recorded_hour"],
+                              keep="first")
+
+    return (out.loc[:, [id_col, "recorded_date", "recorded_hour"]]
+               .sort_values([id_col, "recorded_date", "recorded_hour"])
+               .reset_index(drop=True))
+
+
+
+
+# def extend_hourly_dataset(base_df, addon_df, merge_cols):
+#     """
+#     Extend `base_df` with additional rows from `addon_df` beyond the last hour recorded per encounter_block.
+    
+#     Parameters
+#     ----------
+#     base_df : pd.DataFrame
+#         Main dataset that contains all expected hours.
+#     addon_df : pd.DataFrame
+#         Dataset with potentially additional rows that need to be appended after the last timestamp in base_df.
+#     merge_cols : list
+#         Columns to join on, usually: ['encounter_block', 'recorded_date', 'recorded_hour']
+    
+#     Returns
+#     -------
+#     pd.DataFrame
+#         Combined DataFrame with original base rows + extra addon rows after the last timepoint in base.
+#     """
+
+#     # Step 1: Reconstruct timestamps
+#     base_df = base_df.copy()
+#     addon_df = addon_df.copy()
+    
+#     base_df['recorded_dttm'] = pd.to_datetime(base_df['recorded_date']) + pd.to_timedelta(base_df['recorded_hour'], unit='h')
+#     addon_df['recorded_dttm'] = pd.to_datetime(addon_df['recorded_date']) + pd.to_timedelta(addon_df['recorded_hour'], unit='h')
+
+#     # Step 2: Merge addon onto base
+#     merged = pd.merge(base_df, addon_df.drop(columns='recorded_dttm', errors='ignore'), on=merge_cols, how='left')
+
+#     # Step 3: Get last recorded_dttm per encounter_block
+#     max_times = base_df.groupby('encounter_block')['recorded_dttm'].max().reset_index(name='max_seq_dttm')
+
+#     # Step 4: Get extra rows from addon_df
+#     extra_candidates = pd.merge(addon_df, max_times, on='encounter_block', how='left')
+#     extra_rows = extra_candidates[extra_candidates['recorded_dttm'] > extra_candidates['max_seq_dttm']].drop(
+#         columns=['recorded_dttm', 'max_seq_dttm']
+#     )
+
+#     # Step 5: Combine base + extra
+#     combined_df = pd.concat([merged, extra_rows], ignore_index=True)
+
+#     # Step 6: Clean up
+#     combined_df = combined_df.drop(columns='recorded_dttm', errors='ignore')
+#     combined_df = combined_df.sort_values(merge_cols).reset_index(drop=True)
+
+#     return combined_df
+
+from datetime import timedelta
+import numpy as np
+import pandas as pd
 
 def extend_hourly_dataset(base_df, addon_df, merge_cols):
     """
-    Extend `base_df` with additional rows from `addon_df` beyond the last hour recorded per encounter_block.
+    Extend `base_df` with extra rows from `addon_df` beyond the last hour per encounter_block,
+    preserving all columns from both input DataFrames and filling any time gaps.
     
     Parameters
     ----------
     base_df : pd.DataFrame
-        Main dataset that contains all expected hours.
+        Main dataset with hourly scaffold (e.g., hourly_seq_block).
     addon_df : pd.DataFrame
-        Dataset with potentially additional rows that need to be appended after the last timestamp in base_df.
-    merge_cols : list
-        Columns to join on, usually: ['encounter_block', 'recorded_date', 'recorded_hour']
+        Dataset with additional data (e.g., hourly_vent_block).
+    merge_cols : list of str
+        Columns to join on (typically ['encounter_block', 'recorded_date', 'recorded_hour']).
     
     Returns
     -------
     pd.DataFrame
-        Combined DataFrame with original base rows + extra addon rows after the last timepoint in base.
+        Combined DataFrame with merged values, extra rows, gap-filled hours,
+        and time_from_vent variables added.
     """
 
-    # Step 1: Reconstruct timestamps
     base_df = base_df.copy()
     addon_df = addon_df.copy()
-    
+
+    # ── 1. Add timestamp columns for comparison ────────────────────────
     base_df['recorded_dttm'] = pd.to_datetime(base_df['recorded_date']) + pd.to_timedelta(base_df['recorded_hour'], unit='h')
     addon_df['recorded_dttm'] = pd.to_datetime(addon_df['recorded_date']) + pd.to_timedelta(addon_df['recorded_hour'], unit='h')
 
-    # Step 2: Merge addon onto base
-    merged = pd.merge(base_df, addon_df.drop(columns='recorded_dttm', errors='ignore'), on=merge_cols, how='left')
-
-    # Step 3: Get last recorded_dttm per encounter_block
-    max_times = base_df.groupby('encounter_block')['recorded_dttm'].max().reset_index(name='max_seq_dttm')
-
-    # Step 4: Get extra rows from addon_df
-    extra_candidates = pd.merge(addon_df, max_times, on='encounter_block', how='left')
-    extra_rows = extra_candidates[extra_candidates['recorded_dttm'] > extra_candidates['max_seq_dttm']].drop(
-        columns=['recorded_dttm', 'max_seq_dttm']
+    # ── 2. Get last recorded time per encounter ────────────────────────
+    max_times = (
+        base_df.groupby('encounter_block')['recorded_dttm']
+        .max().reset_index()
+        .rename(columns={'recorded_dttm': 'max_seq_dttm'})
     )
 
-    # Step 5: Combine base + extra
-    combined_df = pd.concat([merged, extra_rows], ignore_index=True)
+    # ── 3. Find extra addon rows after last scaffold time ──────────────
+    addon_with_max = pd.merge(addon_df, max_times, on='encounter_block', how='left')
+    extra_rows = addon_with_max[addon_with_max['recorded_dttm'] > addon_with_max['max_seq_dttm']].copy()
 
-    # Step 6: Clean up
-    combined_df = combined_df.drop(columns='recorded_dttm', errors='ignore')
-    combined_df = combined_df.sort_values(merge_cols).reset_index(drop=True)
+    # ── 4. Fill gaps between scaffold and first extra row ─────────────
+    gap_rows = []
+    for enc_id, group in extra_rows.groupby('encounter_block'):
+        max_time = pd.to_datetime(
+            max_times.loc[max_times['encounter_block'] == enc_id, 'max_seq_dttm'].values[0]
+        )
+        first_extra_time = group['recorded_dttm'].min()
+
+        if first_extra_time <= max_time + timedelta(hours=1):
+            continue
+
+        gap_range = pd.date_range(start=max_time + timedelta(hours=1), end=first_extra_time - timedelta(hours=1), freq='H')
+        for dt in gap_range:
+            gap_rows.append({
+                'encounter_block': enc_id,
+                'recorded_date': dt.date(),
+                'recorded_hour': dt.hour,
+                'recorded_dttm': dt
+            })
+
+    gap_df = pd.DataFrame(gap_rows)
+
+    # ── 5. Ensure gap_df has all columns from base and addon ──────────
+    full_cols = list(set(base_df.columns).union(set(addon_df.columns)))
+    for col in full_cols:
+        if col not in gap_df.columns:
+            gap_df[col] = np.nan
+    gap_df = gap_df[full_cols]
+
+    # ── 6. Merge scaffold and addon ───────────────────────────────────
+    scaffold_merged = pd.merge(
+        base_df.drop(columns='recorded_dttm', errors='ignore'),
+        addon_df.drop(columns='recorded_dttm', errors='ignore'),
+        on=merge_cols,
+        how='left'
+    )
+
+    # ── 7. Combine scaffold + gaps + extras ───────────────────────────
+    combined_df = pd.concat(
+        [scaffold_merged, gap_df.drop(columns=['recorded_dttm'], errors='ignore'), extra_rows.drop(columns=['recorded_dttm', 'max_seq_dttm'], errors='ignore')],
+        ignore_index=True
+    )
+
+    # ── 8. Time from vent ─────────────────────────────────────────────
+    combined_df = combined_df.sort_values(by=merge_cols).reset_index(drop=True)
+    combined_df['time_from_vent'] = combined_df.groupby('encounter_block').cumcount()
+    combined_df['time_from_vent_adjusted'] = np.where(
+        combined_df['time_from_vent'] < 4, -1, combined_df['time_from_vent'] - 4
+    )
+
+    # ── 9. Column reordering ──────────────────────────────────────────
+    id_cols = [col for col in combined_df.columns if col.endswith('id') and col not in ['encounter_block']]
+    key_cols = ['encounter_block', 'recorded_date', 'recorded_hour', 'time_from_vent', 'time_from_vent_adjusted']
+    other_cols = [col for col in combined_df.columns if col not in id_cols + key_cols]
+    combined_df = combined_df[id_cols + key_cols + other_cols]
+
+    combined_df['encounter_block'] = combined_df['encounter_block'].astype(int)
+    combined_df['recorded_hour']   = combined_df['recorded_hour'].astype(int)
 
     return combined_df
-
