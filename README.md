@@ -2,28 +2,26 @@
 
 ## Objective
 
-The primary objective of this project is to determine the windows of opportunity for safely mobilizing patients on ventilators within the first 72 hours of first intubation, during business hours (8am-5pm). The analysis is guided by two established criteria sets, *Patel et al.* and *TEAM Study*, as well as a consensus criteria approach, which includes Green, Yellow, and Red safety flags.
+The primary objective of this project is to determine the windows of opportunity for safely mobilizing patients on ventilators within the first 72 hours of first intubation, during business hours (8am-5pm). The analysis is guided by three established criteria sets, *Patel et al.*, and  *TEAM Study*, as well as a consensus criteria approach, which includes Green, Yellow, and Red safety flags.
 
 
 ## Required CLIF tables and fields
 
 The following tables are required:
-1. **patient**: `patient_id`, `race_category`, `ethnicity_category`, `sex_category`
+1. **patient**: `patient_id`, `race_category`, `ethnicity_category`, `sex_category`, `death_dttm`
 2. **hospitalization**: `patient_id`, `hospitalization_id`, `admission_dttm`, `discharge_dttm`, `age_at_admission`
 3. **vitals**: `hospitalization_id`, `recorded_dttm`, `vital_category`, `vital_value`
    - `vital_category` = 'heart_rate', 'resp_rate', 'sbp', 'dbp', 'map', 'resp_rate', 'spo2', ''weight_kg', 'height_cm'
 4. **labs**: `hospitalization_id`, `lab_result_dttm`, `lab_category`, `lab_value`
-   - `lab_category` = 'lactate'
+   - `lab_category` = 'lactate', 'creatinine', 'bilirubin_total', 'po2_arterial', 'platelet_count'
 5. **medication_admin_continuous**: `hospitalization_id`, `admin_dttm`, `med_name`, `med_category`, `med_dose`, `med_dose_unit`
-   - `med_category` = "norepinephrine", "epinephrine", "phenylephrine", "vasopressin", "dopamine", "angiotensin", "nicardipine", "nitroprusside", "clevidipine", "cisatracurium"
+   - `med_category` = "norepinephrine", "epinephrine", "phenylephrine", "vasopressin", "dopamine", "angiotensin", "nicardipine", "nitroprusside", "clevidipine", "cisatracurium", "vecuronium", "rocuronium"
 6. **respiratory_support**: `hospitalization_id`, `recorded_dttm`, `device_category`, `mode_category`, `tracheostomy`, `fio2_set`, `lpm_set`, `resp_rate_set`, `peep_set`, `resp_rate_obs`
+7. crrt_therapy: `hospitalization_id`, `recorded_dttm`
 
 ## Cohort Identification 
 
-The study period is from March 1, 2020, to March 31, 2022. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters were excluded from the analysis based on the following criteria:
-- Encounters that were intubated for less than 2 hours
-- Encounters that received a tracheostomy within 72 hours of their first intubation
-- Encounters that received Cisatracurium at any point in the first 72 hours
+The study period is from March 1, 2020, to March 31, 2022. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters that were intubated for less than 4 hours were excluded. Additionally, encounters that received tracheostomy or were receiving any paralytic drug were considered ineligible to be mobilised for that hour.
 
 ## Configuration
 
@@ -32,7 +30,7 @@ The study period is from March 1, 2020, to March 31, 2022. The cohort consists o
 3. Update the `config.json` with site-specific settings.
 
 
-## Environment setup
+## Environment setup and project execution
 
 The environment setup code is provided in the `setup.sh` file for macOS and `setup.bat` for Windows.
 
@@ -40,12 +38,12 @@ The environment setup code is provided in the `setup.sh` file for macOS and `set
 
 1. Make the script executable: 
 ```bash
-chmod +x setup.sh
+chmod +x run_project.sh
 ```
 
 2. Run the script:
 ```bash
-./setup.sh
+./run_project.sh
 ```
 
 3. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
@@ -54,68 +52,15 @@ chmod +x setup.sh
 
 1. Run the script:
 ```bat
-setup.bat
+run_project.bat
 ```
 
-2. Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
+## References
 
-
-## Criteria for Safe Therapy
-
-### 1. Patel et al. Criteria
-The *Patel et al.* criteria define safe physiological ranges that must be met for mobilization:
-- **Mean arterial blood pressure (MAP):** 65-110 mm Hg
-- **Systolic blood pressure (SBP):** ≤ 200 mm Hg
-- **Heart rate:** 40-130 beats per minute
-- **Respiratory rate:** 5-40 breaths per minute
-- **Pulse oximetry (SpO2):** ≥ 88%
-
-### 2. TEAM Study Criteria
-The *TEAM Study* criteria focus on hemodynamic and respiratory stability:
-- **Heart rate:** ≤ 150 bpm
-- **Most recent lactate:** ≤ 4.0 mmol/L
-- **Noradrenaline infusion rate:**
-  - ≤ 0.2 mcg/kg/min, OR
-  - 0.1-0.2 mcg/kg/min (without an increase in the infusion rate of more than 25% in the last 6 hours)
-- **Respiratory stability:**
-  - FiO2: ≤ 0.6
-  - PEEP: ≤ 16 cm H2O
-- **Current respiratory rate:** ≤ 45 breaths per minute
-
-### 3. Consensus Criteria
-The Consensus Criteria categorize safety flags into Green, Yellow, and Red, providing a hierarchical assessment of patient stability:
-
-#### Green Criteria
-- **Respiratory:**
-  - SpO2 ≥ 90%
-  - Respiratory rate ≤ 30 breaths/min
-  - FiO2 ≤ 0.6
-  - PEEP ≤ 10 cm H2O
-- **Cardiovascular:**
-  - MAP ≥ 65 mm Hg with no or low support (Norepi < 0.1 μg/kg/min)
-  - Heart rate < 120 bpm
-  - Lactate < 4 mmol/L
-  - Heart rate > 40 bpm
-
-#### Yellow Criteria
-- **Respiratory:**
-  - SpO2 ≥ 90%
-  - FiO2 > 0.6
-  - Respiratory rate > 30 breaths/min
-  - PEEP > 10 cm H2O
-- **Cardiovascular:**
-  - MAP ≥ 65 mm Hg with moderate support (Norepi 0.1-0.3 μg/kg/min)
-  - Heart rate 120-150 bpm
-  - Shock with lactate > 4 mmol/L
-  - Heart rate > 40 bpm
-
-#### Red Criteria
-- **Respiratory:**
-  - SpO2 < 90%
-- **Cardiovascular:**
-  - MAP < 65 mm Hg despite support
-  - MAP ≥ 65 mm Hg but on high support (Norepi > 0.3 μg/kg/min)
-  - IV therapy for hypertensive emergency (SBP > 200 mm Hg or MAP > 110 mm Hg with specific medications)
-  - Heart rate > 150 bpm or < 40 bpm
+1. Patel BK, Wolfe KS, Patel SB, Dugan KC, Esbrook CL, Pawlik AJ, Stulberg M, Kemple C, Teele M, Zeleny E, Hedeker D, Pohlman AS, Arora VM, Hall JB, Kress JP. Effect of early mobilisation on long-term cognitive impairment in critical illness in the USA: a randomised controlled trial. Lancet Respir Med. 2023 Jun;11(6):563-572. doi: 10.1016/S2213-2600(22)00489-1. Epub 2023 Jan 21. [Link](https://pubmed.ncbi.nlm.nih.gov/36693400/)
+2. The TEAM Study Investigators and the ANZICS Clinical Trials Group. Early Active Mobilization during Mechanical Ventilation in the ICU. N Engl J Med. 2022 Oct 26;387(19):1747-1758. doi: 10.1056/NEJMoa2209083. [Link](https://www.nejm.org/doi/full/10.1056/NEJMoa2209083)
+3. Hodgson CL, Stiller K, Needham DM, Tipping CJ, Harrold M, Baldwin CE, Bradley S, Berney S, Caruana LR, Elliott D, Green M, Haines K, Higgins AM, Kaukonen KM, Leditschke IA, Nickels MR, Paratz J, Patman S, Skinner EH, Young PJ, Zanni JM, Denehy L, Webb SA. Expert consensus and recommendations on safety criteria for active mobilization of mechanically ventilated critically ill adults. Crit Care. 2014 Dec 4;18(6):658. doi: 10.1186/s13054-014-0658-y. [Link](https://pubmed.ncbi.nlm.nih.gov/25475522/)
+4. Ohbe H, Jo T, Matsui H, Fushimi K, Yasunaga H. Differences in effect of early enteral nutrition on mortality among ventilated adults with shock requiring low-, medium-, and high-dose noradrenaline: A propensity-matched analysis. Clin Nutr. 2020 Feb;39(2):460-467. doi: 10.1016/j.clnu.2019.02.020. [Link](https://pubmed.ncbi.nlm.nih.gov/30808573/)
+5. Goradia S, Sardaneh AA, Narayan SW, Penm J, Patanwala AE. Vasopressor dose equivalence: A scoping review and suggested formula. J Crit Care. 2021 Feb;61:233-240. doi: 10.1016/j.jcrc.2020.11.002. [Link](https://pubmed.ncbi.nlm.nih.gov/33220576/)
 
 
