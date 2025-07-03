@@ -24,6 +24,19 @@ clif_*.fst
 # ignore the venv
 .mobilization
 
+# ignore configs
+config_mimic.json
+config_ucmc.json
+
+# ignore dev aggregate script
+aggregate/
+
+# ignore output folders
+output_ucmc/
+output_mimic/
+
+sofa_score_mimic.py
+
 # all files under intermediate and final folder
 # all data files and results
 *.csv
@@ -34,6 +47,8 @@ subhazard_summary.json
 subhazard_summary_72hrs.json
 fg_model_summary.txt
 fg_model_summary_72hrs.txt
+fg_model_summary_weekday_72hrs.txt
+subhazard_summary_weekday_72hrs.json
 
 output_old/
 code/logs/

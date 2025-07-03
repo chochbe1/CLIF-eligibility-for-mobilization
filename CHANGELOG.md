@@ -85,3 +85,11 @@ Initial implementation.
 - Removed deprecated survival analysis code using Kaplan-Meier, superseded by competing risk framework on full patient timeline in 03 R script.
 - Added code to look at aggregates for the first 72 hours of intubation, and an additional TableOne for the first 72 hours. 
 - Sensitivity analysis for the weekend vs weekday eligibility still pending. 
+
+## Version 11- June 18, 2025
+- Extending the analysis beyond 2020-2022. Run the code on the entire CLIF database at each site. 
+- Weekday Sensitivity Analysis: 
+  - Added Weekday Detection Logic in (02 script)
+  - Created Weekday-Only Business Hours Flags (02 script)
+  - Updated Competing Risk Dataset Generation (02 script)
+  - Generate Weekday Analysis (03 script)

@@ -4,6 +4,8 @@ self-contained module to compute SOFA-97 in the specified window (start_dttm and
 Author: Kaveri Chhikara
 Date: April 20, 2025
 
+To-do-- add check that required columns exist in the input DataFrame
+
 Usage
 -----
 from sofa_score import compute_sofa

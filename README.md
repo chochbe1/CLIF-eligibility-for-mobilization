@@ -50,7 +50,7 @@ chmod +x run_project.sh
 
 **For Windows:**
 
-1. Run the script:
+1. Run the script in the command prompt:
 ```bat
 run_project.bat
 ```
