@@ -166,8 +166,6 @@ echo Changing to code directory...
 cd code
 if %ERRORLEVEL% NEQ 0 call :handle_error "Setup Working Directory" %ERRORLEVEL%
 
-if not exist logs mkdir logs
-
 REM Check if data path exists (basic check for Windows)
 echo Checking data configuration...
 if exist "..\config\config.json" (

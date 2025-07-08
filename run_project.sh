@@ -177,7 +177,6 @@ log_echo "${GREEN}✅ Completed: Register Jupyter Kernel${RESET}"
 show_progress 6 8 "Setup Working Directory & Validate Data"
 log_echo "Changing to code directory..."
 cd code || handle_error "Change to code directory"
-mkdir -p logs
 
 # Check if data path exists
 log_echo "Checking data configuration..."
@@ -215,7 +214,7 @@ sync
 # Use exec to redirect ALL output to both log files
 {
     jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>/dev/null | python -u 2>&1
-} | tee logs/01_cohort_identification.log | tee -a "$LOG_FILE"
+} | tee ../logs/01_cohort_identification.log | tee -a "$LOG_FILE"
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
     handle_error "Execute 01_cohort_identification.ipynb"
 fi
@@ -226,7 +225,7 @@ log_echo "Executing 02_mobilization_analysis.ipynb..."
 # Convert notebook to script, suppress nbconvert messages, then run with Python
 {
     jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>/dev/null | python -u 2>&1
-} | tee logs/02_mobilization_analysis.log | tee -a "$LOG_FILE"
+} | tee ../logs/02_mobilization_analysis.log | tee -a "$LOG_FILE"
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
     handle_error "Execute 02_mobilization_analysis.ipynb"
 fi
@@ -238,7 +237,7 @@ if [ -n "$RSCRIPT_PATH" ]; then
     log_echo "Running R script: 03_competing_risk_analysis.R..."
     {
         "$RSCRIPT_PATH" 03_competing_risk_analysis.R 2>&1
-    } | tee logs/03_competing_risk_analysis.log | tee -a "$LOG_FILE"
+    } | tee ../logs/03_competing_risk_analysis.log | tee -a "$LOG_FILE"
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
         handle_error "Execute R Analysis"
     fi
