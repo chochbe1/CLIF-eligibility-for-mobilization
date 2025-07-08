@@ -53,3 +53,10 @@ subhazard_summary_weekday_72hrs.json
 output_old/
 code/logs/
 package-lock.json
+
+# log files 
+*.log
+# ai files 
+CLAUDE.md
+todo.md
+dashboard_review.md

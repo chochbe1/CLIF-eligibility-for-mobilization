@@ -21,7 +21,7 @@ The following tables are required:
 
 ## Cohort Identification 
 
-The study period is from March 1, 2020, to March 31, 2022. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters that were intubated for less than 4 hours were excluded. Additionally, encounters that received tracheostomy or were receiving any paralytic drug were considered ineligible to be mobilised for that hour.
+The study period is from January 1, 2018, to December 31, 2024. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters that were intubated for less than 4 hours were excluded. Additionally, encounters that received tracheostomy or were receiving any paralytic drug were considered ineligible to be mobilised for that hour.
 
 ## Configuration
 

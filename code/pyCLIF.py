@@ -925,7 +925,9 @@ med_unit_info = {
     },
     'vasopressin': {
         'required_unit': 'units/min',
-        'acceptable_units': ['units/min', 'units/hr', 'milliunits/min', 'milliunits/hr'],
+        'acceptable_units': ['units/min', 'units/hr', 'milliunits/min', 'milliunits/hr',
+                             'milli-units/min', 'milli-units/hr','milli-units/kg/h','milliunits/kg/h',
+                             'milli-units/kg/min', 'milliunits/kg/min' ],
     },
 }
 
@@ -980,17 +982,24 @@ def get_conversion_factor(med_category: str,
         if med_dose_unit == "mcg/kg/min": return 1.0
         elif med_dose_unit == "mcg/kg/hr": return 1/60
         elif med_dose_unit == "mg/kg/hr": return 1000/60
+        elif med_dose_unit == "mg/kg/min": return 1000
         elif med_dose_unit == "mcg/min": return w_needed(1/weight_kg)
         elif med_dose_unit == "mg/hr": return w_needed(1000/60/weight_kg)
     elif med_category == "angiotensin":
         if med_dose_unit == "ng/kg/min": return 1/1_000
         elif med_dose_unit == "ng/kg/hr": return 1/1_000/60
+        elif med_dose_unit == "mcg/kg/min": return 1.0
     elif med_category == "vasopressin":
         if med_dose_unit == "units/min": return 1.0
-        elif med_dose_unit == "units/hr": return 1/60
+        elif med_dose_unit in ["units/hr", "units/hour"]: return 1/60
         elif med_dose_unit == "milliunits/min": return 1/1_000
+        elif med_dose_unit == "milli-units/min": return 1/1_000
         elif med_dose_unit == "milliunits/hr": return 1/1_000/60
-
+        elif med_dose_unit == "milli-units/hr": return 1/1_000/60
+        elif med_dose_unit == "milliunits/kg/hr": return w_needed(1/1_000/60/weight_kg)
+        elif med_dose_unit == "milli-units/kg/hr": return w_needed(1/1_000/60/weight_kg)
+        elif med_dose_unit == "milliunits/kg/min": return w_needed(1/1_000/weight_kg)
+        elif med_dose_unit == "milli-units/kg/min": return w_needed(1/1_000/weight_kg)
     return None                               # unit not recognised
 
 
@@ -1051,81 +1060,59 @@ def merge_multiple_dfs(*dfs, on=None, how='outer'):
     """
     return reduce(lambda left, right: pd.merge(left, right, on=on, how=how), dfs)
 
-# Example usage:
-# dose_pivot = merge_multiple_dfs(dose_pivot_min, dose_pivot_max, dose_pivot_first, dose_pivot_last, 
-#                               on=['encounter_block', 'recorded_date', 'recorded_hour'], 
-#                               how='outer')
-
-
-# def build_meds_hourly_scaffold(
-#     meds_df: pd.DataFrame,
-#     *,
-#     id_col: str = "encounter_block",
-#     ids=None,
-#     timestamp_col: str = "admin_dttm",
-#     site_tz: str = helper['timezone'] ,          # ← local zone you want in the result
-# ) -> pd.DataFrame:
-#     """
-#     For every encounter block create a *single* row for every LOCAL hour
-#     from the first to the last observation (inclusive).
-
-#     Parameters
-#     ----------
-#     meds_df : DataFrame  - must contain `id_col` and `timestamp_col`
-#     ids     : iterable   - optional list of blocks to keep
-#     site_tz : str        - Olson tz name for the local timezone wanted
-#                          - in the output (e.g. 'US/Central')
-
-#     Returns
-#     -------
-#     DataFrame with columns
-#         id_col · recorded_date · recorded_hour
-#     (no duplicates).
-#     """
-
-#     # ── 0 · optional filtering ─────────────────────────────────────────
-#     if ids is not None:
-#         meds_df = meds_df.loc[meds_df[id_col].isin(ids)].copy()
-#     if meds_df.empty:
-#         raise ValueError("After filtering no rows remain.")
-
-#     # ensure timezone‑aware UTC for safe arithmetic
-#     meds_df = meds_df[[id_col, timestamp_col]].copy()
-#     meds_df[timestamp_col] = pd.to_datetime(meds_df[timestamp_col], utc=True)
-
-#     # drop exact‑timestamp duplicates up‑front (keep first)
-#     meds_df = meds_df.drop_duplicates(subset=[id_col, timestamp_col],
-#                                       keep="first")
-
-#     # ── 1 · build the UTC scaffold ─────────────────────────────────────
-#     scaffolds = []
-#     for blk, g in meds_df.groupby(id_col, sort=False):
-#         start = g[timestamp_col].min().floor("h")
-#         end   = g[timestamp_col].max().floor("h")       # SAME hour as last obs
-#         hrs   = pd.date_range(start, end, freq="h", tz="UTC")
-#         scaffolds.append(pd.DataFrame({id_col: blk, timestamp_col: hrs}))
-
-#     scaffold = pd.concat(scaffolds, ignore_index=True)
-
-#     # ── 2 · merge scaffold ←→ original rows (left join) ────────────────
-#     out = (scaffold
-#            .merge(meds_df, on=[id_col, timestamp_col], how="left")
-#            .sort_values([id_col, timestamp_col])
-#            .reset_index(drop=True))
-#     out[timestamp_col] = pd.to_datetime(out[timestamp_col], utc=True)
-#     # ── 3 · convert to LOCAL time & derive date + hour ─────────────────
-#     out["local_time"]   = out[timestamp_col].dt.tz_convert(site_tz)
-#     out["recorded_date"] = out["local_time"].dt.date
-#     out["recorded_hour"] = out["local_time"].dt.hour
-
-#     # ── 4 · drop the duplicate LOCAL hour created by DST fall‑back ────
-#     out = (out
-#            .drop_duplicates(subset=[id_col, "recorded_date", "recorded_hour"],
-#                             keep="first")
-#            .loc[:, [id_col, "recorded_date", "recorded_hour"]]
-#            .reset_index(drop=True))
-
-#     return out
+def impute_fio2_from_nasal_cannula_flow(df):
+    """
+    Impute missing FiO2 values for nasal cannula based on oxygen flow rate (LPM)
+    using the standard clinical conversion table.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame with device_category, lpm_set, and fio2_set columns
+    
+    Returns:
+    pd.DataFrame: DataFrame with updated fio2_set values
+    """
+    # Create lookup table from the clinical standard (your image)
+    fio2_lookup = {
+        1: 0.24,   # 1 L/min → 24%
+        2: 0.28,   # 2 L/min → 28%  
+        3: 0.32,   # 3 L/min → 32%
+        4: 0.36,   # 4 L/min → 36%
+        5: 0.40,   # 5 L/min → 40%
+        6: 0.44,   # 6 L/min → 44%
+        7: 0.48,   # 7 L/min → 48%
+        8: 0.52,   # 8 L/min → 52%
+        9: 0.56,   # 9 L/min → 56%
+        10: 0.60   # 10 L/min → 60%
+    }
+    
+    # Create mask for rows that need imputation
+    nasal_cannula_mask = (
+        (df['device_category'] == 'nasal cannula') &
+        (df['fio2_set'].isna()) &  # Missing FiO2
+        (df['lpm_set'].notna()) &  # Have LPM value
+        (df['lpm_set'] >= 1) &     # Within lookup range  
+        (df['lpm_set'] <= 10) &    # Within lookup range
+        (df['lpm_set'] == df['lpm_set'].round())  # Integer values only
+    )
+    
+    # Apply the lookup for eligible rows
+    df.loc[nasal_cannula_mask, 'fio2_set'] = df.loc[nasal_cannula_mask, 'lpm_set'].map(fio2_lookup)
+    
+    # Report what was imputed
+    n_imputed = nasal_cannula_mask.sum()
+    if n_imputed > 0:
+        print(f"✅ Imputed FiO2 for {n_imputed:,} nasal cannula rows using LPM lookup table")
+        
+        # Show breakdown by LPM
+        imputed_breakdown = df[nasal_cannula_mask]['lpm_set'].value_counts().sort_index()
+        print("   Breakdown by LPM:")
+        for lpm, count in imputed_breakdown.items():
+            fio2_pct = int(fio2_lookup[lpm] * 100)
+            print(f"   {lpm}L/min → {fio2_pct}%: {count:,} rows")
+    else:
+        print(" No nasal cannula rows needed FiO2 imputation")
+    
+    return df
 
 def build_meds_hourly_scaffold(
         meds_df: pd.DataFrame,

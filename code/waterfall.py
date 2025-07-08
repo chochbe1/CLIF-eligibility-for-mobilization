@@ -9,8 +9,7 @@ def process_resp_support_waterfall(
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
-    Clean + water-fall-fill the CLIF `resp_support` table **exactly** like the
-    Nick's reference R pipeline.
+    Clean + water-fall-fill the CLIF `resp_support` table like Nick's reference R pipeline.
 
     Parameters
     ----------
@@ -40,7 +39,6 @@ def process_resp_support_waterfall(
     -----
     * This function **does not** change timezones; convert before calling
       if needed.
-    * No column re-ordering trick is used (avoids duplicated column error).
     """
 
     p = print if verbose else (lambda *a, **k: None)
@@ -48,7 +46,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 0 – set-up & hourly scaffold                                 #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 0 – initialise & create hourly scaffold")
+    p("✦ Phase 0: initialise & create hourly scaffold")
 
     rs = resp_support.copy()
 
@@ -89,6 +87,7 @@ def process_resp_support_waterfall(
     rs["recorded_hour"] = rs["recorded_dttm"].dt.hour
 
     # Hourly scaffold rows (HH:59:59)
+    print("Creating hourly scaffold for each encounter")
     min_max = (
         rs.groupby(id_col)["recorded_dttm"]
         .agg(["min", "max"])
@@ -125,7 +124,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 1 – heuristics to infer / clean device & mode                #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 1 – heuristic inference of device / mode")
+    p("✦ Phase 1: heuristic inference of device / mode")
 
     # Most-common names (used as fall-back labels)
     device_counts = (
@@ -266,7 +265,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 2 – hierarchical IDs                                         #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 2 – build device / mode hierarchical IDs")
+    p("✦ Phase 2: build device / mode hierarchical IDs")
 
     def change_id(col: pd.Series, by: pd.Series) -> pd.Series:
         return (
@@ -316,7 +315,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 3 – numeric waterfall inside mode_name_id                    #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 3 – numeric down/up-fill inside mode_name_id blocks")
+    p("✦ Phase 3: numeric down/up-fill inside mode_name_id blocks")
 
     # FiO2 default for room-air
     ra_mask = (rs["device_category"] == "room air") & rs["fio2_set"].isna()
@@ -374,7 +373,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 4 – final tidy-up                                            #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 4 – final deduplication & ordering")
+    p("✦ Phase 4: final deduplication & ordering")
     rs = (
         rs.drop_duplicates()
         .sort_values([id_col, "recorded_dttm"])

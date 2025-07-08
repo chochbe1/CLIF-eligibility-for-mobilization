@@ -93,3 +93,5 @@ Initial implementation.
   - Created Weekday-Only Business Hours Flags (02 script)
   - Updated Competing Risk Dataset Generation (02 script)
   - Generate Weekday Analysis (03 script)
+- Fill values of fio2_set if the device is nasal cannula, and lpm_set is available. Follow [this mapping](https://www.respiratorytherapyzone.com/oxygen-flow-rate-fio2/)
+- Created a patient facing dashboard for this cohort, specifically for mobilization criteria. 
