@@ -6,8 +6,8 @@ REM Enhanced run_project.bat — Interactive CLIF project execution script (Wind
 REM ── Setup logging ──────────────────────────────────────────────────────────────
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
 set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
-set "LOG_FILE=output\execution_log_%TIMESTAMP%.log"
-if not exist "output" mkdir "output"
+set "LOG_FILE=logs\execution_log_%TIMESTAMP%.log"
+if not exist "logs" mkdir "logs"
 
 REM Initialize log file with header
 echo CLIF Eligibility for Mobilization Analysis Pipeline - Execution Log > "%LOG_FILE%"
@@ -17,37 +17,38 @@ echo ======================================== >> "%LOG_FILE%"
 REM ── Go to script directory ──
 cd /d %~dp0
 
-REM ── ASCII Welcome Banner ───────────────────────────────────────────────────────
+REM Jump to main execution
+goto main
+
 :show_banner
 cls
 echo.
-echo ╔══════════════════════════════════════════════════════════════════════════════╗
-echo ║                                                                              ║
-echo ║                              ██████ ██      ██ ███████                       ║
-echo ║                             ██      ██      ██ ██                            ║
-echo ║                             ██      ██      ██ █████                         ║
-echo ║                             ██      ██      ██ ██                            ║
-echo ║                              ██████ ███████ ██ ██                            ║
-echo ║                                                                              ║
-echo ║            ELIGIBILITY FOR MOBILIZATION ANALYSIS PROJECT                    ║
-echo ║                                                                              ║
-echo ╚══════════════════════════════════════════════════════════════════════════════╝
+echo ===============================================================================
+echo                                                                               
+echo                               CLIF                                 
+echo                                                                               
+echo                 ELIGIBILITY FOR MOBILIZATION PROJECT                    
+echo                                                                               
+echo ===============================================================================
 echo.
 echo Welcome to the CLIF Eligibility for Mobilization Analysis Pipeline!
-echo This script will guide you through the complete analysis workflow.
 echo.
 
 REM ── Progress separator ─────────────────────────────────────────────────────────
 :separator
 echo ==================================================
+echo ================================================== >> "%LOG_FILE%"
 goto :eof
 
 REM ── Progress display function ──────────────────────────────────────────────────
 :show_progress
 echo.
+echo. >> "%LOG_FILE%"
 call :separator
 echo Step %~1/%~2: %~3
+echo Step %~1/%~2: %~3 >> "%LOG_FILE%"
 echo [%date% %time%] Starting: %~3
+echo [%date% %time%] Starting: %~3 >> "%LOG_FILE%"
 call :separator
 goto :eof
 
@@ -59,16 +60,6 @@ echo Step failed: %~1
 echo Exit code: %~2
 echo.
 
-REM Check for common errors
-findstr /i "FileNotFoundError.*MIMIC-IV" "%LOG_FILE%" >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    echo It looks like the MIMIC-IV data files are not found.
-    echo Please ensure you have:
-    echo 1. Downloaded the MIMIC-IV dataset
-    echo 2. Updated config/config.json with the correct data path
-    echo 3. Converted the data to CLIF format
-    echo.
-)
 
 echo Check the log file for full details: %LOG_FILE%
 echo.
@@ -118,6 +109,7 @@ if "!choice!"=="1" (
 )
 
 REM ── Main execution flow ────────────────────────────────────────────────────────
+:main
 call :show_banner
 
 REM Check R environment first
@@ -186,24 +178,36 @@ REM Step 7: Execute notebooks
 call :show_progress 7 8 "Execute Analysis Notebooks"
 
 echo Executing 01_cohort_identification.ipynb...
-REM Use jupyter nbconvert with unbuffered output
-jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>nul | python -u 2>&1 | tee logs\01_cohort_identification.log | tee -a "%LOG_FILE%"
+echo Executing 01_cohort_identification.ipynb... >> "%LOG_FILE%"
+REM Use jupyter nbconvert with output redirection for Windows
+jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>nul | python -u > logs\01_cohort_identification.log 2>&1
+type logs\01_cohort_identification.log
+type logs\01_cohort_identification.log >> "%LOG_FILE%"
 if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 01_cohort_identification.ipynb" %ERRORLEVEL%
 echo ✅ Completed: 01_cohort_identification.ipynb
+echo ✅ Completed: 01_cohort_identification.ipynb >> "%LOG_FILE%"
 
 echo.
 echo Executing 02_mobilization_analysis.ipynb...
-jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>nul | python -u 2>&1 | tee logs\02_mobilization_analysis.log | tee -a "%LOG_FILE%"
+echo Executing 02_mobilization_analysis.ipynb... >> "%LOG_FILE%"
+jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>nul | python -u > logs\02_mobilization_analysis.log 2>&1
+type logs\02_mobilization_analysis.log
+type logs\02_mobilization_analysis.log >> "%LOG_FILE%"
 if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 02_mobilization_analysis.ipynb" %ERRORLEVEL%
 echo ✅ Completed: 02_mobilization_analysis.ipynb
+echo ✅ Completed: 02_mobilization_analysis.ipynb >> "%LOG_FILE%"
 
 REM Step 8: Run R script
 call :show_progress 8 8 "Execute R Analysis"
 if defined RSCRIPT_PATH (
     echo Running R script: 03_competing_risk_analysis.R...
-    "%RSCRIPT_PATH%" 03_competing_risk_analysis.R 2>&1 | tee logs\03_competing_risk_analysis.log | tee -a "%LOG_FILE%"
+    echo Running R script: 03_competing_risk_analysis.R... >> "%LOG_FILE%"
+    "%RSCRIPT_PATH%" 03_competing_risk_analysis.R > logs\03_competing_risk_analysis.log 2>&1
+    type logs\03_competing_risk_analysis.log
+    type logs\03_competing_risk_analysis.log >> "%LOG_FILE%"
     if %ERRORLEVEL% NEQ 0 call :handle_error "Execute R Analysis" %ERRORLEVEL%
     echo ✅ Completed: R Analysis
+    echo ✅ Completed: R Analysis >> "%LOG_FILE%"
 ) else (
     echo ⚠️  R script execution skipped. Please run manually:
     echo    cd code && Rscript 03_competing_risk_analysis.R

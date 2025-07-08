@@ -17,8 +17,8 @@ RESET="\033[0m"
 # ── Setup logging ──────────────────────────────────────────────────────────────
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-LOG_FILE="${SCRIPT_DIR}/output/execution_log_${TIMESTAMP}.log"
-mkdir -p "${SCRIPT_DIR}/output"
+LOG_FILE="${SCRIPT_DIR}/logs/execution_log_${TIMESTAMP}.log"
+mkdir -p "${SCRIPT_DIR}/logs"
 
 # Function to log and display
 log_echo() {
@@ -26,11 +26,10 @@ log_echo() {
 }
 
 # Initialize log file with header
-echo "CLIF Eligibility for Mobilization Analysis Pipeline - Execution Log" > "$LOG_FILE"
+echo "CLIF Eligibility for Mobilization Project- Execution Log" > "$LOG_FILE"
 echo "Started at: $(date)" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
 
-# ── ASCII Welcome Banner ───────────────────────────────────────────────────────
 show_banner() {
     clear
     log_echo "${CYAN}${BOLD}"
@@ -42,13 +41,12 @@ show_banner() {
     log_echo "║                             ██      ██      ██ ██                            ║"
     log_echo "║                              ██████ ███████ ██ ██                            ║"
     log_echo "║                                                                              ║"
-    log_echo "║                         ELIGIBILITY   FOR    MOBILIZATION                    ║"
+    log_echo "║                      ELIGIBILITY FOR MOBILIZATION PROJECT                    ║"
     log_echo "║                                                                              ║"
     log_echo "╚══════════════════════════════════════════════════════════════════════════════╝"
     log_echo "${RESET}"
     log_echo ""
-    log_echo "${GREEN}Welcome to the CLIF Eligibility for Mobilization Analysis Pipeline!${RESET}"
-    log_echo "${BLUE}This script will guide you through the complete analysis workflow.${RESET}"
+    log_echo "${GREEN}Welcome to the CLIF Eligibility for Mobilization Project!${RESET}"
     log_echo ""
 }
 
@@ -80,15 +78,6 @@ handle_error() {
     log_echo "${RED}Exit code: ${exit_code}${RESET}"
     log_echo ""
     
-    # Check for common errors
-    if grep -q "FileNotFoundError.*MIMIC-IV" "$LOG_FILE" 2>/dev/null; then
-        log_echo "${YELLOW}It looks like the MIMIC-IV data files are not found.${RESET}"
-        log_echo "${YELLOW}Please ensure you have:${RESET}"
-        log_echo "${YELLOW}1. Downloaded the MIMIC-IV dataset${RESET}"
-        log_echo "${YELLOW}2. Updated config/config.json with the correct data path${RESET}"
-        log_echo "${YELLOW}3. Converted the data to CLIF format${RESET}"
-        log_echo ""
-    fi
     
     log_echo "${RED}Check the log file for full details: ${LOG_FILE}${RESET}"
     log_echo ""
@@ -218,8 +207,11 @@ log_echo "Executing 01_cohort_identification.ipynb..."
 # Ensure buffer is flushed before executing
 sync
 # Convert notebook to script, suppress nbconvert messages, then run with Python
-jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>/dev/null | python -u 2>&1 | tee logs/01_cohort_identification.log | tee -a "$LOG_FILE"
-if [ ${PIPESTATUS[1]} -ne 0 ]; then
+# Use exec to redirect ALL output to both log files
+{
+    jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>/dev/null | python -u 2>&1
+} | tee logs/01_cohort_identification.log | tee -a "$LOG_FILE"
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     handle_error "Execute 01_cohort_identification.ipynb"
 fi
 log_echo "${GREEN}✅ Completed: 01_cohort_identification.ipynb${RESET}"
@@ -227,8 +219,10 @@ log_echo "${GREEN}✅ Completed: 01_cohort_identification.ipynb${RESET}"
 log_echo ""
 log_echo "Executing 02_mobilization_analysis.ipynb..."
 # Convert notebook to script, suppress nbconvert messages, then run with Python
-jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>/dev/null | python -u 2>&1 | tee logs/02_mobilization_analysis.log | tee -a "$LOG_FILE"
-if [ ${PIPESTATUS[1]} -ne 0 ]; then
+{
+    jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>/dev/null | python -u 2>&1
+} | tee logs/02_mobilization_analysis.log | tee -a "$LOG_FILE"
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     handle_error "Execute 02_mobilization_analysis.ipynb"
 fi
 log_echo "${GREEN}✅ Completed: 02_mobilization_analysis.ipynb${RESET}"
@@ -237,7 +231,12 @@ log_echo "${GREEN}✅ Completed: 02_mobilization_analysis.ipynb${RESET}"
 show_progress 8 8 "Execute R Analysis"
 if [ -n "$RSCRIPT_PATH" ]; then
     log_echo "Running R script: 03_competing_risk_analysis.R..."
-    "$RSCRIPT_PATH" 03_competing_risk_analysis.R 2>&1 | tee logs/03_competing_risk_analysis.log | tee -a "$LOG_FILE" || handle_error "Execute R Analysis"
+    {
+        "$RSCRIPT_PATH" 03_competing_risk_analysis.R 2>&1
+    } | tee logs/03_competing_risk_analysis.log | tee -a "$LOG_FILE"
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        handle_error "Execute R Analysis"
+    fi
     log_echo "${GREEN}✅ Completed: R Analysis${RESET}"
 else
     log_echo "${YELLOW}⚠️  R script execution skipped. Please run manually:${RESET}"
