@@ -19,7 +19,7 @@ def load_config():
     
     with open(json_path, 'r') as file:
         config = json.load(file)
-    print("✅ Loaded configuration from config.json")
+    print("Loaded configuration from config.json")
     return config
 
 helper = load_config()
@@ -1101,7 +1101,7 @@ def impute_fio2_from_nasal_cannula_flow(df):
     # Report what was imputed
     n_imputed = nasal_cannula_mask.sum()
     if n_imputed > 0:
-        print(f"✅ Imputed FiO2 for {n_imputed:,} nasal cannula rows using LPM lookup table")
+        print(f"[OK] Imputed FiO2 for {n_imputed:,} nasal cannula rows using LPM lookup table")
         
         # Show breakdown by LPM
         imputed_breakdown = df[nasal_cannula_mask]['lpm_set'].value_counts().sort_index()

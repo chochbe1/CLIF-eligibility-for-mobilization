@@ -394,5 +394,5 @@ def process_resp_support_waterfall(
     drop_cols = [c for c in drop_cols if c in rs.columns]
     rs = rs.drop(columns=drop_cols)
 
-    p("✅ Respiratory-support waterfall complete.")
+    p("[OK] Respiratory-support waterfall complete.")
     return rs
