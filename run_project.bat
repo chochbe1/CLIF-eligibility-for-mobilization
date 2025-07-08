@@ -123,10 +123,7 @@ REM Step 2: Create virtual environment
 call :show_progress 2 8 "Create Virtual Environment"
 if not exist ".mobilization\" (
     echo Creating virtual environment...
-    python -m venv .mobilization > temp.log 2>&1
-    type temp.log
-    type temp.log >> "%LOG_FILE%"
-    del temp.log
+    python -m venv .mobilization
     if %ERRORLEVEL% NEQ 0 call :handle_error "Create Virtual Environment" %ERRORLEVEL%
 ) else (
     echo Virtual environment already exists.
@@ -145,33 +142,21 @@ echo [OK] Completed: Activate Virtual Environment
 REM Step 4: Install dependencies
 call :show_progress 4 8 "Install Dependencies"
 echo Upgrading pip...
-python -m pip install --upgrade pip > temp.log 2>&1
-type temp.log
-type temp.log >> "%LOG_FILE%"
-del temp.log
+python -m pip install --upgrade pip
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
 
 echo Installing dependencies...
-pip install -r requirements.txt > temp.log 2>&1
-type temp.log
-type temp.log >> "%LOG_FILE%"
-del temp.log
+pip install -r requirements.txt
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
 
-pip install jupyter ipykernel > temp.log 2>&1
-type temp.log
-type temp.log >> "%LOG_FILE%"
-del temp.log
+pip install jupyter ipykernel
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
 echo [OK] Completed: Install Dependencies
 
 REM Step 5: Register Jupyter kernel
 call :show_progress 5 8 "Register Jupyter Kernel"
 echo Registering Jupyter kernel...
-python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)" > temp.log 2>&1
-type temp.log
-type temp.log >> "%LOG_FILE%"
-del temp.log
+python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)"
 if %ERRORLEVEL% NEQ 0 call :handle_error "Register Jupyter Kernel" %ERRORLEVEL%
 echo [OK] Completed: Register Jupyter Kernel
 
@@ -199,9 +184,7 @@ call :show_progress 7 8 "Execute Analysis Notebooks"
 echo Executing 01_cohort_identification.ipynb...
 echo Executing 01_cohort_identification.ipynb... >> "%LOG_FILE%"
 REM Use jupyter nbconvert with output redirection for Windows
-jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>nul | python -u > logs\01_cohort_identification.log 2>&1
-type logs\01_cohort_identification.log
-type logs\01_cohort_identification.log >> "%LOG_FILE%"
+jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>nul | python -u
 if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 01_cohort_identification.ipynb" %ERRORLEVEL%
 echo [OK] Completed: 01_cohort_identification.ipynb
 echo [OK] Completed: 01_cohort_identification.ipynb >> "%LOG_FILE%"
@@ -209,9 +192,7 @@ echo [OK] Completed: 01_cohort_identification.ipynb >> "%LOG_FILE%"
 echo.
 echo Executing 02_mobilization_analysis.ipynb...
 echo Executing 02_mobilization_analysis.ipynb... >> "%LOG_FILE%"
-jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>nul | python -u > logs\02_mobilization_analysis.log 2>&1
-type logs\02_mobilization_analysis.log
-type logs\02_mobilization_analysis.log >> "%LOG_FILE%"
+jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>nul | python -u
 if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 02_mobilization_analysis.ipynb" %ERRORLEVEL%
 echo [OK] Completed: 02_mobilization_analysis.ipynb
 echo [OK] Completed: 02_mobilization_analysis.ipynb >> "%LOG_FILE%"
@@ -221,9 +202,7 @@ call :show_progress 8 8 "Execute R Analysis"
 if defined RSCRIPT_PATH (
     echo Running R script: 03_competing_risk_analysis.R...
     echo Running R script: 03_competing_risk_analysis.R... >> "%LOG_FILE%"
-    "%RSCRIPT_PATH%" 03_competing_risk_analysis.R > logs\03_competing_risk_analysis.log 2>&1
-    type logs\03_competing_risk_analysis.log
-    type logs\03_competing_risk_analysis.log >> "%LOG_FILE%"
+    "%RSCRIPT_PATH%" 03_competing_risk_analysis.R
     if %ERRORLEVEL% NEQ 0 call :handle_error "Execute R Analysis" %ERRORLEVEL%
     echo [OK] Completed: R Analysis
     echo [OK] Completed: R Analysis >> "%LOG_FILE%"
