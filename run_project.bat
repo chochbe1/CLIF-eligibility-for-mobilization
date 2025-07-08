@@ -55,7 +55,7 @@ goto :eof
 REM ── Error handler ──────────────────────────────────────────────────────────────
 :handle_error
 echo.
-echo ❌ ERROR OCCURRED!
+echo [ERROR] ERROR OCCURRED!
 echo Step failed: %~1
 echo Exit code: %~2
 echo.
@@ -71,12 +71,12 @@ call :show_progress 1 8 "Checking R Environment"
 
 where Rscript >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo ✅ R found in PATH
+    echo [OK] R found in PATH
     set "RSCRIPT_PATH=Rscript"
     goto :eof
 )
 
-echo ⚠️  R not found in PATH
+echo [WARNING] R not found in PATH
 echo.
 echo Please choose an option:
 echo 1) Provide path to R installation
@@ -94,15 +94,15 @@ if "!choice!"=="1" (
     set /p "r_path=Enter path to Rscript.exe: "
     if exist "!r_path!" (
         set "RSCRIPT_PATH=!r_path!"
-        echo ✅ R path accepted: !r_path!
+        echo [OK] R path accepted: !r_path!
         goto :eof
     ) else (
-        echo ❌ Invalid path or file not found
+        echo [ERROR] Invalid path or file not found
         goto :r_choice_loop
     )
 ) else if "!choice!"=="2" (
     set "RSCRIPT_PATH="
-    echo ⚠️  R execution will be skipped
+    echo [WARNING] R execution will be skipped
     goto :eof
 ) else if "!choice!"=="3" (
     echo Please install R and try again
@@ -132,7 +132,7 @@ if not exist ".mobilization\" (
     echo Virtual environment already exists.
     echo Virtual environment already exists. >> "%LOG_FILE%"
 )
-echo ✅ Completed: Create Virtual Environment
+echo [OK] Completed: Create Virtual Environment
 
 REM Step 3: Activate virtual environment
 call :show_progress 3 8 "Activate Virtual Environment"
@@ -140,7 +140,7 @@ echo Activating virtual environment...
 echo Activating virtual environment... >> "%LOG_FILE%"
 call .mobilization\Scripts\activate.bat
 if %ERRORLEVEL% NEQ 0 call :handle_error "Activate Virtual Environment" %ERRORLEVEL%
-echo ✅ Completed: Activate Virtual Environment
+echo [OK] Completed: Activate Virtual Environment
 
 REM Step 4: Install dependencies
 call :show_progress 4 8 "Install Dependencies"
@@ -163,7 +163,7 @@ type temp.log
 type temp.log >> "%LOG_FILE%"
 del temp.log
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
-echo ✅ Completed: Install Dependencies
+echo [OK] Completed: Install Dependencies
 
 REM Step 5: Register Jupyter kernel
 call :show_progress 5 8 "Register Jupyter Kernel"
@@ -173,7 +173,7 @@ type temp.log
 type temp.log >> "%LOG_FILE%"
 del temp.log
 if %ERRORLEVEL% NEQ 0 call :handle_error "Register Jupyter Kernel" %ERRORLEVEL%
-echo ✅ Completed: Register Jupyter Kernel
+echo [OK] Completed: Register Jupyter Kernel
 
 REM Step 6: Setup working directory and validate data
 call :show_progress 6 8 "Setup Working Directory & Validate Data"
@@ -188,10 +188,10 @@ echo Checking data configuration...
 if exist "..\config\config.json" (
     echo Config file found, proceeding with analysis...
 ) else (
-    echo ⚠️  Config file not found: ..\config\config.json
+    echo [WARNING] Config file not found: ..\config\config.json
 )
 
-echo ✅ Completed: Setup Working Directory
+echo [OK] Completed: Setup Working Directory
 
 REM Step 7: Execute notebooks
 call :show_progress 7 8 "Execute Analysis Notebooks"
@@ -203,8 +203,8 @@ jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identificatio
 type logs\01_cohort_identification.log
 type logs\01_cohort_identification.log >> "%LOG_FILE%"
 if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 01_cohort_identification.ipynb" %ERRORLEVEL%
-echo ✅ Completed: 01_cohort_identification.ipynb
-echo ✅ Completed: 01_cohort_identification.ipynb >> "%LOG_FILE%"
+echo [OK] Completed: 01_cohort_identification.ipynb
+echo [OK] Completed: 01_cohort_identification.ipynb >> "%LOG_FILE%"
 
 echo.
 echo Executing 02_mobilization_analysis.ipynb...
@@ -213,8 +213,8 @@ jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysi
 type logs\02_mobilization_analysis.log
 type logs\02_mobilization_analysis.log >> "%LOG_FILE%"
 if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 02_mobilization_analysis.ipynb" %ERRORLEVEL%
-echo ✅ Completed: 02_mobilization_analysis.ipynb
-echo ✅ Completed: 02_mobilization_analysis.ipynb >> "%LOG_FILE%"
+echo [OK] Completed: 02_mobilization_analysis.ipynb
+echo [OK] Completed: 02_mobilization_analysis.ipynb >> "%LOG_FILE%"
 
 REM Step 8: Run R script
 call :show_progress 8 8 "Execute R Analysis"
@@ -225,18 +225,18 @@ if defined RSCRIPT_PATH (
     type logs\03_competing_risk_analysis.log
     type logs\03_competing_risk_analysis.log >> "%LOG_FILE%"
     if %ERRORLEVEL% NEQ 0 call :handle_error "Execute R Analysis" %ERRORLEVEL%
-    echo ✅ Completed: R Analysis
-    echo ✅ Completed: R Analysis >> "%LOG_FILE%"
+    echo [OK] Completed: R Analysis
+    echo [OK] Completed: R Analysis >> "%LOG_FILE%"
 ) else (
-    echo ⚠️  R script execution skipped. Please run manually:
+    echo [WARNING] R script execution skipped. Please run manually:
     echo    cd code && Rscript 03_competing_risk_analysis.R
 )
 
 REM Success message
 call :separator
-echo 🎉 SUCCESS! All analysis steps completed successfully!
-echo 📊 Results saved to: output\
-echo 📝 Full log saved to: %LOG_FILE%
+echo [SUCCESS] All analysis steps completed successfully!
+echo Results saved to: output\
+echo Full log saved to: %LOG_FILE%
 call :separator
 
 REM Dashboard option
@@ -248,7 +248,7 @@ echo.
 :dashboard_choice
 set /p "dashboard_choice=Launch dashboard? (y/n): "
 if /i "!dashboard_choice!"=="y" (
-    echo 🚀 Starting dashboard...
+    echo Starting dashboard...
     cd ..\app
     streamlit run mobilization_dashboard.py
     goto :dashboard_done
