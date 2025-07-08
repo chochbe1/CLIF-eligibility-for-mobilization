@@ -111,6 +111,11 @@ else
         read -p "Enter your choice (1-3): " choice
         case $choice in
             1)
+                echo "Examples:"
+                echo "  macOS (Homebrew): /opt/homebrew/bin/Rscript"
+                echo "  macOS (system): /usr/local/bin/Rscript"
+                echo "  Linux: /usr/bin/Rscript"
+                echo ""
                 read -p "Enter path to Rscript: " r_path
                 if [ -f "$r_path" ] && [ -x "$r_path" ]; then
                     RSCRIPT_PATH="$r_path"

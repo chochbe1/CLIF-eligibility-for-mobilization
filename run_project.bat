@@ -87,6 +87,10 @@ echo.
 :r_choice_loop
 set /p "choice=Enter your choice (1-3): "
 if "!choice!"=="1" (
+    echo Examples:
+    echo   Windows: C:\Program Files\R\R-4.3.0\bin\Rscript.exe
+    echo   Windows: C:\Program Files\R\R-4.4.0\bin\Rscript.exe
+    echo.
     set /p "r_path=Enter path to Rscript.exe: "
     if exist "!r_path!" (
         set "RSCRIPT_PATH=!r_path!"
@@ -119,7 +123,10 @@ REM Step 2: Create virtual environment
 call :show_progress 2 8 "Create Virtual Environment"
 if not exist ".mobilization\" (
     echo Creating virtual environment...
-    python -m venv .mobilization 2>&1 | tee -a "%LOG_FILE%"
+    python -m venv .mobilization > temp.log 2>&1
+    type temp.log
+    type temp.log >> "%LOG_FILE%"
+    del temp.log
     if %ERRORLEVEL% NEQ 0 call :handle_error "Create Virtual Environment" %ERRORLEVEL%
 ) else (
     echo Virtual environment already exists.
@@ -138,21 +145,33 @@ echo ✅ Completed: Activate Virtual Environment
 REM Step 4: Install dependencies
 call :show_progress 4 8 "Install Dependencies"
 echo Upgrading pip...
-python -m pip install --upgrade pip 2>&1 | tee -a "%LOG_FILE%"
+python -m pip install --upgrade pip > temp.log 2>&1
+type temp.log
+type temp.log >> "%LOG_FILE%"
+del temp.log
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
 
 echo Installing dependencies...
-pip install -r requirements.txt 2>&1 | tee -a "%LOG_FILE%"
+pip install -r requirements.txt > temp.log 2>&1
+type temp.log
+type temp.log >> "%LOG_FILE%"
+del temp.log
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
 
-pip install jupyter ipykernel 2>&1 | tee -a "%LOG_FILE%"
+pip install jupyter ipykernel > temp.log 2>&1
+type temp.log
+type temp.log >> "%LOG_FILE%"
+del temp.log
 if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
 echo ✅ Completed: Install Dependencies
 
 REM Step 5: Register Jupyter kernel
 call :show_progress 5 8 "Register Jupyter Kernel"
 echo Registering Jupyter kernel...
-python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)" 2>&1 | tee -a "%LOG_FILE%"
+python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)" > temp.log 2>&1
+type temp.log
+type temp.log >> "%LOG_FILE%"
+del temp.log
 if %ERRORLEVEL% NEQ 0 call :handle_error "Register Jupyter Kernel" %ERRORLEVEL%
 echo ✅ Completed: Register Jupyter Kernel
 
