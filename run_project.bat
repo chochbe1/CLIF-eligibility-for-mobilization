@@ -91,30 +91,12 @@ set "log_name=%~2"
 call :log_echo "Executing %notebook_name%..."
 call :log_echo "Converting and executing notebook..."
 
-REM Create a temporary Python script to handle the execution and output
-echo import subprocess > temp_exec.py
-echo import sys >> temp_exec.py
-echo import os >> temp_exec.py
-echo. >> temp_exec.py
-echo # Convert notebook to script >> temp_exec.py
-echo result = subprocess.run([sys.executable, '-m', 'jupyter', 'nbconvert', '--to', 'script', '--stdout', '--log-level', 'ERROR', '%notebook_name%'], >> temp_exec.py
-echo                         capture_output=True, text=True) >> temp_exec.py
-echo if result.returncode != 0: >> temp_exec.py
-echo     print(f"Failed to convert notebook: {result.stderr}", file=sys.stderr) >> temp_exec.py
-echo     sys.exit(1) >> temp_exec.py
-echo. >> temp_exec.py
-echo # Execute the converted script >> temp_exec.py
-echo exec(result.stdout) >> temp_exec.py
-
-REM Run the temporary script and capture output
-python -u temp_exec.py > "..\logs\%log_name%" 2>&1
-set "exec_result=%ERRORLEVEL%"
+REM Run Jupyter nbconvert and pipe to Python directly
+jupyter nbconvert --to script --stdout --log-level ERROR %notebook_name% 2>nul | python -u > "..\logs\%log_name%" 2>&1
+set "exec_result=!ERRORLEVEL!"
 
 REM Display the output to console while it's already saved to log
 type "..\logs\%log_name%"
-
-REM Clean up
-del temp_exec.py
 
 REM Check result and handle error if needed
 if %exec_result% NEQ 0 (
