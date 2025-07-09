@@ -209,7 +209,7 @@ dev.off()
 cat("\n=== WEEKDAY SENSITIVITY ANALYSIS RESULTS (72h) ===\n")
 print(comparison_72h)
 
-## 6 ── Fine–Gray sub‑hazard  (full follow‑up & 72h) ---------------------
+## 6 ── FineGray sub‑hazard  (full follow‑up & 72h) ---------------------
 bind_for_fg <- \(path, grp)
 as.data.table(read_parquet(path))[, .(encounter_block, t_event, outcome,
                                       group = grp)]
@@ -262,10 +262,10 @@ make_fg <- function(max_h = Inf, suffix = "") {
   invisible(NULL)
 }
 
-cat("── Fine–Gray (full follow‑up)\n")
+cat("── FineGray (full follow‑up)\n")
 make_fg(suffix = "")
 
-cat("── Fine–Gray (first 72 h)\n")
+cat("── FineGray (first 72 h)\n")
 make_fg(max_h = 72, suffix = "_72hrs")
 
 ## Fine gray for weekdays
@@ -320,7 +320,7 @@ make_fg_weekday <- function(max_h = 72, suffix = "_weekday_72hrs") {
   invisible(NULL)
 }
 
-cat("── Fine–Gray Weekday (first 72 h)\n")
+cat("FineGray Weekday (first 72 h)\n")
 make_fg_weekday(max_h = 72, suffix = "_weekday_72hrs")
 
 # Print final comparison summary
