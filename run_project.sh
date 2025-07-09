@@ -2,10 +2,9 @@
 
 # Enhanced setup_and_run.sh — Interactive CLIF project execution script (Mac/Linux)
 
-set -e
-set -o pipefail
+# set -o pipefail will still be used for individual commands where needed
 
-# ── ANSI colours for pretty output ─────────────────────────────────────────────
+# ── ANSI colours ─────────────────────────────────────────────
 YELLOW="\033[33m"
 CYAN="\033[36m"
 GREEN="\033[32m"
@@ -68,6 +67,9 @@ show_progress() {
 }
 
 # ── Error handler ──────────────────────────────────────────────────────────────
+# Global array to track failed steps
+FAILED_STEPS=()
+
 handle_error() {
     local exit_code=$?
     local step_name=$1
@@ -76,12 +78,14 @@ handle_error() {
     log_echo "${RED}${BOLD}❌ ERROR OCCURRED!${RESET}"
     log_echo "${RED}Step failed: ${step_name}${RESET}"
     log_echo "${RED}Exit code: ${exit_code}${RESET}"
-    log_echo ""
-    
-    
     log_echo "${RED}Check the log file for full details: ${LOG_FILE}${RESET}"
+    log_echo "${YELLOW}Continuing with next step...${RESET}"
     log_echo ""
-    exit $exit_code
+    
+    # Add to failed steps array
+    FAILED_STEPS+=("$step_name")
+    
+    return 0  # Continue execution
 }
 
 # Export environment variables for unbuffered output
@@ -211,47 +215,70 @@ log_echo "Executing 01_cohort_identification.ipynb..."
 # Ensure buffer is flushed before executing
 sync
 # Convert notebook to script, suppress nbconvert messages, then run with Python
-# Use exec to redirect ALL output to both log files
-{
-    jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>/dev/null | python -u 2>&1
-} | tee ../logs/01_cohort_identification.log | tee -a "$LOG_FILE"
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
+log_echo "Converting and executing notebook..."
+set -o pipefail  # Make pipes fail if any command fails
+jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>/dev/null | python -u 2>&1 | tee ../logs/01_cohort_identification.log | tee -a "$LOG_FILE"
+# Check if the pipeline failed
+if [ $? -ne 0 ]; then
     handle_error "Execute 01_cohort_identification.ipynb"
+    log_echo "${RED}❌ Failed: 01_cohort_identification.ipynb${RESET}"
+else
+    log_echo "${GREEN}✅ Completed: 01_cohort_identification.ipynb${RESET}"
 fi
-log_echo "${GREEN}✅ Completed: 01_cohort_identification.ipynb${RESET}"
 
 log_echo ""
 log_echo "Executing 02_mobilization_analysis.ipynb..."
 # Convert notebook to script, suppress nbconvert messages, then run with Python
-{
-    jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>/dev/null | python -u 2>&1
-} | tee ../logs/02_mobilization_analysis.log | tee -a "$LOG_FILE"
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
+log_echo "Converting and executing notebook..."
+jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>/dev/null | python -u 2>&1 | tee ../logs/02_mobilization_analysis.log | tee -a "$LOG_FILE"
+# Check if the pipeline failed
+if [ $? -ne 0 ]; then
     handle_error "Execute 02_mobilization_analysis.ipynb"
+    log_echo "${RED}❌ Failed: 02_mobilization_analysis.ipynb${RESET}"
+else
+    log_echo "${GREEN}✅ Completed: 02_mobilization_analysis.ipynb${RESET}"
 fi
-log_echo "${GREEN}✅ Completed: 02_mobilization_analysis.ipynb${RESET}"
 
 # Step 8: Run R script
 show_progress 8 8 "Execute R Analysis"
 if [ -n "$RSCRIPT_PATH" ]; then
     log_echo "Running R script: 03_competing_risk_analysis.R..."
-    {
-        "$RSCRIPT_PATH" 03_competing_risk_analysis.R 2>&1
-    } | tee ../logs/03_competing_risk_analysis.log | tee -a "$LOG_FILE"
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    "$RSCRIPT_PATH" 03_competing_risk_analysis.R 2>&1 | tee ../logs/03_competing_risk_analysis.log | tee -a "$LOG_FILE"
+    # Check if the pipeline failed
+    if [ $? -ne 0 ]; then
         handle_error "Execute R Analysis"
+        log_echo "${RED}❌ Failed: R Analysis${RESET}"
+    else
+        log_echo "${GREEN}✅ Completed: R Analysis${RESET}"
     fi
-    log_echo "${GREEN}✅ Completed: R Analysis${RESET}"
 else
     log_echo "${YELLOW}⚠️  R script execution skipped. Please run manually:${RESET}"
     log_echo "${BLUE}   cd code && Rscript 03_competing_risk_analysis.R${RESET}"
 fi
 
-# Success message
+# Final summary
 separator
-log_echo "${GREEN}${BOLD}🎉 SUCCESS! All analysis steps completed successfully!${RESET}"
+log_echo "${CYAN}${BOLD}📋 EXECUTION SUMMARY${RESET}"
+separator
+
+# Display success/failure summary
+if [ ${#FAILED_STEPS[@]} -eq 0 ]; then
+    log_echo "${GREEN}${BOLD}🎉 SUCCESS! All analysis steps completed successfully!${RESET}"
+else
+    log_echo "${YELLOW}${BOLD}⚠️  PARTIAL SUCCESS: Some steps failed${RESET}"
+    log_echo ""
+    log_echo "${RED}${BOLD}Failed steps:${RESET}"
+    for step in "${FAILED_STEPS[@]}"; do
+        log_echo "${RED}  ❌ $step${RESET}"
+    done
+    log_echo ""
+    log_echo "${YELLOW}Please check the individual log files for error details${RESET}"
+fi
+
+log_echo ""
 log_echo "${BLUE}📊 Results saved to: output/${RESET}"
 log_echo "${BLUE}📝 Full log saved to: ${LOG_FILE}${RESET}"
+log_echo "${BLUE}📄 Individual logs in: logs/${RESET}"
 separator
 
 # Dashboard option

@@ -202,8 +202,8 @@ for (r in res_weekday_72)
   lines(r$cif$time, r$cif$est, col = cols[r$name], lwd = 2)
 legend("bottomright", legend = names(cols), col = cols, lwd = 2, lty = 1)
 
-dev.off()
 par(mfrow = c(1, 1))  # Reset to single plot
+dev.off()
 
 # Print results
 cat("\n=== WEEKDAY SENSITIVITY ANALYSIS RESULTS (72h) ===\n")
@@ -322,96 +322,6 @@ make_fg_weekday <- function(max_h = 72, suffix = "_weekday_72hrs") {
 
 cat("── Fine–Gray Weekday (first 72 h)\n")
 make_fg_weekday(max_h = 72, suffix = "_weekday_72hrs")
-
-## 6b ── CIF Weekday-only (full follow‑up) ──────────────────────────────
-cat("── CIF Weekday-only (full follow‑up)\n")
-res_weekday_full <- lapply(names(paths_weekday), \(nm)
-                   analyse_one(nm, paths_weekday[[nm]],
-                               file.path(out_dir, sprintf("cif_weekday_%s.csv", tolower(nm)))))
-
-# Save weekday full follow-up median times
-fwrite(data.frame(Criterion = sapply(res_weekday_full, `[[`, "name"),
-                  Median_h_weekday_full = sapply(res_weekday_full, `[[`, "median")),
-       file.path(out_dir, "median_times_weekday_full.csv"))
-
-# Plot weekday full follow-up CIF
-png(file.path(out_dir, "graphs", "cif_overlay_weekday_full.png"),
-    width = 1800, height = 1200, res = 200)
-plot(0, 0, type="n", xlim=c(0, max(sapply(res_weekday_full, \(x) max(x$cif$time)))),
-     ylim=c(0,1), xlab="Time (hours)", ylab="CIF", main="Weekdays Only (Full Follow-up)")
-for (r in res_weekday_full)
-  lines(r$cif$time, r$cif$est, col = cols[r$name], lwd = 2)
-legend("bottomright", legend = names(cols), col = cols, lwd = 2, lty = 1)
-dev.off()
-
-## 7 ── COMPREHENSIVE DATA EXPORT FOR MULTI-SITE SHARING ─────────────────
-
-cat("── Saving comprehensive results for multi-site sharing\n")
-
-# Comprehensive median comparison table
-all_medians <- data.frame(
-  Criterion = sapply(res_72, `[[`, "name"),
-  Median_AllDay_72h = sapply(res_72, `[[`, "median"),
-  Median_Weekday_72h = sapply(res_weekday_72, `[[`, "median"),
-  Median_AllDay_Full = sapply(res_full, `[[`, "median"),
-  Median_Weekday_Full = sapply(res_weekday_full, `[[`, "median")
-)
-
-# Calculate all differences
-all_medians$Diff_72h <- all_medians$Median_Weekday_72h - all_medians$Median_AllDay_72h
-all_medians$Diff_Full <- all_medians$Median_Weekday_Full - all_medians$Median_AllDay_Full
-all_medians$Pct_Change_72h <- (all_medians$Diff_72h / all_medians$Median_AllDay_72h) * 100
-all_medians$Pct_Change_Full <- (all_medians$Diff_Full / all_medians$Median_AllDay_Full) * 100
-
-fwrite(all_medians, file.path(out_dir, "comprehensive_median_comparison.csv"))
-
-# Sample sizes for all analyses
-save_sample_sizes <- function(results, suffix = "") {
-  sample_data <- data.frame(
-    Criterion = sapply(results, `[[`, "name"),
-    N_Total = sapply(results, function(x) {
-      fit <- attr(x$cif, "cuminc")
-      fit$n
-    }),
-    N_Events = sapply(results, function(x) {
-      fit <- attr(x$cif, "cuminc")
-      fit$n.event
-    })
-  )
-  fwrite(sample_data, file.path(out_dir, sprintf("sample_sizes%s.csv", suffix)))
-}
-
-save_sample_sizes(res_full, "_full")
-save_sample_sizes(res_72, "_72hrs") 
-save_sample_sizes(res_weekday_72, "_weekday_72hrs")
-save_sample_sizes(res_weekday_full, "_weekday_full")
-
-cat("── Multi-site sharing files saved\n")
-
-## 8 ── FINAL SUMMARY WITH MASTER FILE ───────────────────────────────────
-
-# Master summary file
-master_summary <- list(
-  analysis_date = as.character(Sys.Date()),
-  analysis_timestamp = as.character(Sys.time()),
-  n_criteria = length(paths),
-  criteria_names = names(paths),
-  analyses_performed = c("full_followup", "72hrs", "weekday_72hrs", "weekday_full"),
-  files_generated = list.files(out_dir, pattern = "\\.(csv|json)$", recursive = TRUE)
-)
-
-write_json(master_summary, file.path(out_dir, "master_summary.json"), 
-           auto_unbox = TRUE, pretty = TRUE)
-
-cat("\n=== ANALYSIS COMPLETE ===\n")
-cat("All-day analysis outputs written to:", normalizePath(out_dir), "\n")
-cat("Weekday sensitivity analysis outputs written to:", normalizePath(out_dir), "\n")
-cat("\nKey outputs for multi-site sharing:\n")
-cat("- comprehensive_median_comparison.csv\n")
-cat("- sample_sizes_*.csv (4 files)\n")
-cat("- master_summary.json\n")
-cat("- All CIF curves: *_cif*.csv\n")
-cat("- All Fine-Gray results: subhazard_summary*.json\n")
 
 # Print final comparison summary
 cat("\n=== MEDIAN TIME DIFFERENCES (WEEKDAY vs ALL-DAY) ===\n")

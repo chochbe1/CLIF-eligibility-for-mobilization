@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 
 def process_resp_support_waterfall(
@@ -93,8 +94,11 @@ def process_resp_support_waterfall(
         .agg(["min", "max"])
         .reset_index()
     )
+    
+    # Use tqdm to show progress for scaffold creation
+    tqdm.pandas(desc="Creating hourly scaffolds")
     scaffold = (
-        min_max.apply(
+        min_max.progress_apply(
             lambda r: pd.date_range(
                 r["min"].floor("h"),
                 r["max"].floor("h"),
@@ -358,9 +362,12 @@ def process_resp_support_waterfall(
         return g[num_cols_fill].ffill().bfill()
         # return g[num_cols_fill].ffill()
 
+    # Add progress tracking for waterfall fill
+    print(f"Applying waterfall fill to {rs[id_col].nunique()} encounters...")
+    tqdm.pandas(desc="Waterfall fill by mode_name_id")
     rs[num_cols_fill] = (
         rs.groupby([id_col, "mode_name_id"], group_keys=False, sort=False)
-        .apply(fill_block)
+        .progress_apply(fill_block)
     )
 
     # “t-piece” rows with blank mode_category → classify as blow-by
