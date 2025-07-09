@@ -756,7 +756,7 @@ def plot_green_components(patient_data):
 
 def main():
     st.title("🚦 Eligibility for mobilization Dashboard")
-    st.markdown("Patient-level visualization for debugging mobilization eligibility criteria")
+    st.markdown("Patient-level visualization for exploring mobilization eligibility criteria")
     
     # Get the project root directory using multiple fallback methods
     current_dir = Path.cwd()
@@ -905,7 +905,7 @@ def main():
                 border: 3px solid rgba(255, 255, 255, 0.2);
                 opacity: 0.7;
             ">
-                CHICAGO<br><span style="font-size: 14px;">Never<br>Eligible</span>
+                CHICAGO
             </div>
             """, unsafe_allow_html=True)
     
@@ -953,7 +953,7 @@ def main():
                 border: 3px solid rgba(255, 255, 255, 0.2);
                 opacity: 0.7;
             ">
-                TEAM<br><span style="font-size: 14px;">Never<br>Eligible</span>
+                TEAM
             </div>
             """, unsafe_allow_html=True)
     
@@ -1001,7 +1001,7 @@ def main():
                 border: 3px solid rgba(255, 255, 255, 0.2);
                 opacity: 0.7;
             ">
-                YELLOW<br><span style="font-size: 14px;">Never<br>Eligible</span>
+                YELLOW
             </div>
             """, unsafe_allow_html=True)
     
@@ -1049,7 +1049,7 @@ def main():
                 border: 3px solid rgba(255, 255, 255, 0.2);
                 opacity: 0.7;
             ">
-                GREEN<br><span style="font-size: 14px;">Never<br>Eligible</span>
+                GREEN
             </div>
             """, unsafe_allow_html=True)
     

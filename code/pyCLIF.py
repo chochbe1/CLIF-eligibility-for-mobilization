@@ -17,7 +17,7 @@ def load_config():
     project_root = os.path.dirname(os.path.dirname(__file__))
     json_path = os.path.join(project_root, 'config', 'config.json')
     
-    with open(json_path, 'r') as file:
+    with open(json_path, 'r', encoding='utf-8') as file:
         config = json.load(file)
     print("Loaded configuration from config.json")
     return config
