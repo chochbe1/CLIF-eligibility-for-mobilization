@@ -308,5 +308,5 @@ while true; do
 done
 
 log_echo ""
-log_echo "${GREEN}Thank you for running the CLIF Eligibility for Mobilization Analysis Pipeline!${RESET}"
+log_echo "${GREEN}Thank you for running the CLIF Eligibility for Mobilization Project!${RESET}"
 read -rp "Press [Enter] to exit..."

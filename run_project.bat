@@ -1,18 +1,27 @@
 @echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
 
-REM Enhanced run_project.bat — Interactive CLIF project execution script (Windows)
+REM run_project.bat — Interactive CLIF project execution script (Windows)
 
 REM ── Setup logging ──────────────────────────────────────────────────────────────
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
 set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
-set "LOG_FILE=logs\execution_log_%TIMESTAMP%.log"
-if not exist "logs" mkdir "logs"
+set "SCRIPT_DIR=%~dp0"
+set "LOG_FILE=%SCRIPT_DIR%logs\execution_log_%TIMESTAMP%.log"
+if not exist "%SCRIPT_DIR%logs" mkdir "%SCRIPT_DIR%logs"
 
 REM Initialize log file with header
-echo CLIF Eligibility for Mobilization Analysis Pipeline - Execution Log > "%LOG_FILE%"
+echo CLIF Eligibility for Mobilization Project - Execution Log > "%LOG_FILE%"
 echo Started at: %date% %time% >> "%LOG_FILE%"
 echo ======================================== >> "%LOG_FILE%"
+
+REM Initialize failed steps tracking
+set "FAILED_STEPS="
+set "FAILED_COUNT=0"
+
+REM Export environment variables for unbuffered output
+set PYTHONUNBUFFERED=1
+set MPLBACKEND=Agg
 
 REM ── Go to script directory ──
 cd /d %~dp0
@@ -20,50 +29,101 @@ cd /d %~dp0
 REM Jump to main execution
 goto main
 
+REM ── Function to log and display ──────────────────────────────────────────────
+:log_echo
+echo %~1
+echo %~1 >> "%LOG_FILE%"
+goto :eof
+
 :show_banner
 cls
-echo.
-echo ===============================================================================
-echo                                                                               
-echo                               CLIF                                 
-echo                                                                               
-echo                 ELIGIBILITY FOR MOBILIZATION PROJECT                    
-echo                                                                               
-echo ===============================================================================
-echo.
-echo Welcome to the CLIF Eligibility for Mobilization Analysis Pipeline!
-echo.
+call :log_echo " "
+call :log_echo "==============================================================================="
+call :log_echo "                                                                               "
+call :log_echo "                               CLIF                                            "
+call :log_echo "                                                                               "
+call :log_echo "                 ELIGIBILITY FOR MOBILIZATION PROJECT                          "
+call :log_echo "                                                                               "
+call :log_echo "==============================================================================="
+call :log_echo " "
+call :log_echo "Welcome to the CLIF Eligibility for Mobilization Project!"
+call :log_echo " "
+goto :eof
 
 REM ── Progress separator ─────────────────────────────────────────────────────────
 :separator
-echo ==================================================
-echo ================================================== >> "%LOG_FILE%"
+call :log_echo "=================================================="
 goto :eof
 
 REM ── Progress display function ──────────────────────────────────────────────────
 :show_progress
-echo.
-echo. >> "%LOG_FILE%"
 call :separator
-echo Step %~1/%~2: %~3
-echo Step %~1/%~2: %~3 >> "%LOG_FILE%"
-echo [%date% %time%] Starting: %~3
-echo [%date% %time%] Starting: %~3 >> "%LOG_FILE%"
+call :log_echo "Step %~1/%~2: %~3"
+call :log_echo "[%date% %time%] Starting: %~3"
 call :separator
 goto :eof
 
-REM ── Error handler ──────────────────────────────────────────────────────────────
+REM ── Error handler - CONTINUES execution like Unix version ────────────────────
 :handle_error
-echo.
-echo [ERROR] ERROR OCCURRED!
-echo Step failed: %~1
-echo Exit code: %~2
-echo.
+set "exit_code=%ERRORLEVEL%"
+set "step_name=%~1"
 
+call :log_echo " "
+call :log_echo "[ERROR] ERROR OCCURRED!"
+call :log_echo "Step failed: %step_name%"
+call :log_echo "Exit code: %exit_code%"
+call :log_echo "Check the log file for full details: %LOG_FILE%"
+call :log_echo "Continuing with next step..."
+call :log_echo " "
 
-echo Check the log file for full details: %LOG_FILE%
-echo.
-exit /b %~2
+REM Add to failed steps list
+set "FAILED_STEPS=%FAILED_STEPS%,%step_name%"
+set /a FAILED_COUNT+=1
+
+REM Return 0 to continue execution (like Unix version)
+exit /b 0
+
+REM ── Execute notebook with output capture ─────────────────────────────────────
+:execute_notebook
+set "notebook_name=%~1"
+set "log_name=%~2"
+
+call :log_echo "Executing %notebook_name%..."
+call :log_echo "Converting and executing notebook..."
+
+REM Create a temporary Python script to handle the execution and output
+echo import subprocess > temp_exec.py
+echo import sys >> temp_exec.py
+echo import os >> temp_exec.py
+echo. >> temp_exec.py
+echo # Convert notebook to script >> temp_exec.py
+echo result = subprocess.run([sys.executable, '-m', 'jupyter', 'nbconvert', '--to', 'script', '--stdout', '--log-level', 'ERROR', '%notebook_name%'], >> temp_exec.py
+echo                         capture_output=True, text=True) >> temp_exec.py
+echo if result.returncode != 0: >> temp_exec.py
+echo     print(f"Failed to convert notebook: {result.stderr}", file=sys.stderr) >> temp_exec.py
+echo     sys.exit(1) >> temp_exec.py
+echo. >> temp_exec.py
+echo # Execute the converted script >> temp_exec.py
+echo exec(result.stdout) >> temp_exec.py
+
+REM Run the temporary script and capture output
+python -u temp_exec.py > "..\logs\%log_name%" 2>&1
+set "exec_result=%ERRORLEVEL%"
+
+REM Display the output to console while it's already saved to log
+type "..\logs\%log_name%"
+
+REM Clean up
+del temp_exec.py
+
+REM Check result and handle error if needed
+if %exec_result% NEQ 0 (
+    call :handle_error "Execute %notebook_name%"
+    call :log_echo "[FAILED] %notebook_name%"
+) else (
+    call :log_echo "[OK] Completed: %notebook_name%"
+)
+goto :eof
 
 REM ── Check and setup R environment ─────────────────────────────────────────────
 :check_r_environment
@@ -71,18 +131,18 @@ call :show_progress 1 8 "Checking R Environment"
 
 where Rscript >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
-    echo [OK] R found in PATH
+    call :log_echo "[OK] R found in PATH"
     set "RSCRIPT_PATH=Rscript"
     goto :eof
 )
 
-echo [WARNING] R not found in PATH
-echo.
-echo Please choose an option:
-echo 1) Provide path to R installation
-echo 2) Run manually (script will skip R execution^)
-echo 3) Exit and install R
-echo.
+call :log_echo "[WARNING] R not found in PATH"
+call :log_echo " "
+call :log_echo "Please choose an option:"
+call :log_echo "1) Provide path to R installation"
+call :log_echo "2) Run manually (script will skip R execution)"
+call :log_echo "3) Exit and install R"
+call :log_echo " "
 
 :r_choice_loop
 set /p "choice=Enter your choice (1-3): "
@@ -94,21 +154,21 @@ if "!choice!"=="1" (
     set /p "r_path=Enter path to Rscript.exe: "
     if exist "!r_path!" (
         set "RSCRIPT_PATH=!r_path!"
-        echo [OK] R path accepted: !r_path!
+        call :log_echo "[OK] R path accepted: !r_path!"
         goto :eof
     ) else (
-        echo [ERROR] Invalid path or file not found
+        call :log_echo "[ERROR] Invalid path or file not found"
         goto :r_choice_loop
     )
 ) else if "!choice!"=="2" (
     set "RSCRIPT_PATH="
-    echo [WARNING] R execution will be skipped
+    call :log_echo "[WARNING] R execution will be skipped"
     goto :eof
 ) else if "!choice!"=="3" (
-    echo Please install R and try again
+    call :log_echo "Please install R and try again"
     exit /b 0
 ) else (
-    echo Invalid choice. Please enter 1, 2, or 3
+    call :log_echo "Invalid choice. Please enter 1, 2, or 3"
     goto :r_choice_loop
 )
 
@@ -122,124 +182,169 @@ call :check_r_environment
 REM Step 2: Create virtual environment
 call :show_progress 2 8 "Create Virtual Environment"
 if not exist ".mobilization\" (
-    echo Creating virtual environment...
-    python -m venv .mobilization
-    if %ERRORLEVEL% NEQ 0 call :handle_error "Create Virtual Environment" %ERRORLEVEL%
+    call :log_echo "Creating virtual environment (.mobilization)..."
+    python -m venv .mobilization 2>&1
+    if !ERRORLEVEL! NEQ 0 (
+        call :handle_error "Create Virtual Environment"
+    )
 ) else (
-    echo Virtual environment already exists.
-    echo Virtual environment already exists. >> "%LOG_FILE%"
+    call :log_echo "Virtual environment already exists."
 )
-echo [OK] Completed: Create Virtual Environment
+call :log_echo "[OK] Completed: Create Virtual Environment"
 
 REM Step 3: Activate virtual environment
 call :show_progress 3 8 "Activate Virtual Environment"
-echo Activating virtual environment...
-echo Activating virtual environment... >> "%LOG_FILE%"
+call :log_echo "Activating virtual environment..."
 call .mobilization\Scripts\activate.bat
-if %ERRORLEVEL% NEQ 0 call :handle_error "Activate Virtual Environment" %ERRORLEVEL%
-echo [OK] Completed: Activate Virtual Environment
+if !ERRORLEVEL! NEQ 0 (
+    call :handle_error "Activate Virtual Environment"
+)
+call :log_echo "[OK] Completed: Activate Virtual Environment"
 
 REM Step 4: Install dependencies
 call :show_progress 4 8 "Install Dependencies"
-echo Upgrading pip...
+call :log_echo "Upgrading pip..."
 python -m pip install --upgrade pip
-if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
+if !ERRORLEVEL! NEQ 0 (
+    call :handle_error "Upgrade pip"
+)
 
-echo Installing dependencies...
+call :log_echo "Installing dependencies..."
 pip install -r requirements.txt
-if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
+if !ERRORLEVEL! NEQ 0 (
+    call :handle_error "Install requirements"
+)
 
 pip install jupyter ipykernel
-if %ERRORLEVEL% NEQ 0 call :handle_error "Install Dependencies" %ERRORLEVEL%
-echo [OK] Completed: Install Dependencies
+if !ERRORLEVEL! NEQ 0 (
+    call :handle_error "Install jupyter"
+)
+call :log_echo "[OK] Completed: Install Dependencies"
 
 REM Step 5: Register Jupyter kernel
 call :show_progress 5 8 "Register Jupyter Kernel"
-echo Registering Jupyter kernel...
+call :log_echo "Registering Jupyter kernel..."
 python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)"
-if %ERRORLEVEL% NEQ 0 call :handle_error "Register Jupyter Kernel" %ERRORLEVEL%
-echo [OK] Completed: Register Jupyter Kernel
+if !ERRORLEVEL! NEQ 0 (
+    call :handle_error "Register Jupyter Kernel"
+)
+call :log_echo "[OK] Completed: Register Jupyter Kernel"
 
 REM Step 6: Setup working directory and validate data
 call :show_progress 6 8 "Setup Working Directory & Validate Data"
-echo Changing to code directory...
+call :log_echo "Changing to code directory..."
 cd code
-if %ERRORLEVEL% NEQ 0 call :handle_error "Setup Working Directory" %ERRORLEVEL%
-
-REM Check if data path exists (basic check for Windows)
-echo Checking data configuration...
-if exist "..\config\config.json" (
-    echo Config file found, proceeding with analysis...
-) else (
-    echo [WARNING] Config file not found: ..\config\config.json
+if !ERRORLEVEL! NEQ 0 (
+    call :handle_error "Change to code directory"
 )
 
-echo [OK] Completed: Setup Working Directory
+REM Check if data path exists
+call :log_echo "Checking data configuration..."
+if exist "..\config\config.json" (
+    REM Try to read data path from config
+    for /f "usebackq tokens=*" %%a in (`python -c "import json; print(json.load(open('../config/config.json'))['tables_path'])" 2^>nul`) do set "DATA_PATH=%%a"
+    if defined DATA_PATH (
+        if exist "!DATA_PATH!" (
+            call :log_echo "[OK] Data path found: !DATA_PATH!"
+        ) else (
+            call :log_echo "[WARNING] Data path not found: !DATA_PATH!"
+            call :log_echo "Please ensure the MIMIC-IV data is available at this location"
+            call :log_echo "Or update config\config.json with the correct path"
+            call :log_echo " "
+            set /p "continue_choice=Continue anyway? (y/n): "
+            if /i not "!continue_choice!"=="y" (
+                call :log_echo "Exiting. Please set up the data path and try again."
+                exit /b 0
+            )
+        )
+    )
+) else (
+    call :log_echo "[WARNING] Config file not found: ..\config\config.json"
+)
+
+call :log_echo "[OK] Completed: Setup Working Directory"
 
 REM Step 7: Execute notebooks
 call :show_progress 7 8 "Execute Analysis Notebooks"
 
-echo Executing 01_cohort_identification.ipynb...
-echo Executing 01_cohort_identification.ipynb... >> "%LOG_FILE%"
-REM Use jupyter nbconvert with output redirection for Windows
-jupyter nbconvert --to script --stdout --log-level ERROR 01_cohort_identification.ipynb 2>nul | python -u
-if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 01_cohort_identification.ipynb" %ERRORLEVEL%
-echo [OK] Completed: 01_cohort_identification.ipynb
-echo [OK] Completed: 01_cohort_identification.ipynb >> "%LOG_FILE%"
+call :execute_notebook "01_cohort_identification.ipynb" "01_cohort_identification.log"
 
-echo.
-echo Executing 02_mobilization_analysis.ipynb...
-echo Executing 02_mobilization_analysis.ipynb... >> "%LOG_FILE%"
-jupyter nbconvert --to script --stdout --log-level ERROR 02_mobilization_analysis.ipynb 2>nul | python -u
-if %ERRORLEVEL% NEQ 0 call :handle_error "Execute 02_mobilization_analysis.ipynb" %ERRORLEVEL%
-echo [OK] Completed: 02_mobilization_analysis.ipynb
-echo [OK] Completed: 02_mobilization_analysis.ipynb >> "%LOG_FILE%"
+call :log_echo " "
+call :execute_notebook "02_mobilization_analysis.ipynb" "02_mobilization_analysis.log"
 
 REM Step 8: Run R script
 call :show_progress 8 8 "Execute R Analysis"
 if defined RSCRIPT_PATH (
-    echo Running R script: 03_competing_risk_analysis.R...
-    echo Running R script: 03_competing_risk_analysis.R... >> "%LOG_FILE%"
-    "%RSCRIPT_PATH%" 03_competing_risk_analysis.R
-    if %ERRORLEVEL% NEQ 0 call :handle_error "Execute R Analysis" %ERRORLEVEL%
-    echo [OK] Completed: R Analysis
-    echo [OK] Completed: R Analysis >> "%LOG_FILE%"
+    call :log_echo "Running R script: 03_competing_risk_analysis.R..."
+    "%RSCRIPT_PATH%" 03_competing_risk_analysis.R > "..\logs\03_competing_risk_analysis.log" 2>&1
+    set "r_result=!ERRORLEVEL!"
+    
+    REM Display R output
+    type "..\logs\03_competing_risk_analysis.log"
+    
+    if !r_result! NEQ 0 (
+        call :handle_error "Execute R Analysis"
+        call :log_echo "[FAILED] R Analysis"
+    ) else (
+        call :log_echo "[OK] Completed: R Analysis"
+    )
 ) else (
-    echo [WARNING] R script execution skipped. Please run manually:
-    echo    cd code && Rscript 03_competing_risk_analysis.R
+    call :log_echo "[WARNING] R script execution skipped. Please run manually:"
+    call :log_echo "   cd code && Rscript 03_competing_risk_analysis.R"
 )
 
-REM Success message
+REM Final summary (matching Unix version)
 call :separator
-echo [SUCCESS] All analysis steps completed successfully!
-echo Results saved to: output\
-echo Full log saved to: %LOG_FILE%
+call :log_echo "EXECUTION SUMMARY"
+call :separator
+
+REM Display success/failure summary
+if %FAILED_COUNT% EQU 0 (
+    call :log_echo "[SUCCESS] All analysis steps completed successfully!"
+) else (
+    call :log_echo "[WARNING] PARTIAL SUCCESS: Some steps failed"
+    call :log_echo " "
+    call :log_echo "Failed steps:"
+    
+    REM Parse and display failed steps
+    for %%a in (%FAILED_STEPS%) do (
+        if not "%%a"=="" call :log_echo "  [X] %%a"
+    )
+    
+    call :log_echo " "
+    call :log_echo "Please check the individual log files for error details"
+)
+
+call :log_echo " "
+call :log_echo "Results saved to: output\"
+call :log_echo "Full log saved to: %LOG_FILE%"
+call :log_echo "Individual logs in: logs\"
 call :separator
 
 REM Dashboard option
-echo.
-echo Would you like to launch the visualization dashboard?
-echo The dashboard provides interactive patient-level analysis
-echo.
+call :log_echo " "
+call :log_echo "Would you like to launch the visualization dashboard?"
+call :log_echo "The dashboard provides interactive patient-level analysis"
+call :log_echo " "
 
 :dashboard_choice
 set /p "dashboard_choice=Launch dashboard? (y/n): "
 if /i "!dashboard_choice!"=="y" (
-    echo Starting dashboard...
+    call :log_echo "Starting dashboard..."
     cd ..\app
     streamlit run mobilization_dashboard.py
     goto :dashboard_done
 ) else if /i "!dashboard_choice!"=="n" (
-    echo Dashboard launch skipped. You can run it later with:
-    echo    cd app && streamlit run mobilization_dashboard.py
+    call :log_echo "Dashboard launch skipped. You can run it later with:"
+    call :log_echo "   cd app && streamlit run mobilization_dashboard.py"
     goto :dashboard_done
 ) else (
-    echo Please answer y or n
+    call :log_echo "Please answer y or n"
     goto :dashboard_choice
 )
 
 :dashboard_done
-echo.
-echo Thank you for using the CLIF Eligibility for Mobilization Analysis Pipeline!
+call :log_echo " "
+call :log_echo "Thank you for running the CLIF Eligibility for Mobilization Project!"
 pause
 exit /b 0
