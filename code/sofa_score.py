@@ -40,7 +40,7 @@ logger.setLevel(logging.INFO)
 # Outlier config file
 ##############################################################################
 
-with open('../config/outlier_config.json', 'r') as f:
+with open('../config/outlier_config.json', 'r', encoding='utf-8') as f:
     outlier_cfg = json.load(f)
 
 
