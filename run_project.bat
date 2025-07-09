@@ -108,6 +108,27 @@ if defined RSCRIPT_PATH (
 
 REM ── Step 11: Done ──
 echo.
-echo ✅ All steps completed successfully!
+echo ✅ All steps completed successfully! You can launch the dashboard from the app directory.
 pause
+
+REM ── Step 12: Ask to launch dashboard ──
+echo.
+echo Would you like to launch the visualization dashboard?
+echo The dashboard provides interactive patient-level analysis.
+echo.
+
+:launch_dashboard_prompt
+set /p "launch_dash=Launch dashboard? (y/n): "
+if /I "!launch_dash!"=="Y" (
+    echo 🚀 Starting dashboard...
+    cd ..\app
+    streamlit run mobilization_dashboard.py
+) else if /I "!launch_dash!"=="N" (
+    echo Dashboard launch skipped. You can run it later with:
+    echo    cd app && streamlit run mobilization_dashboard.py
+) else (
+    echo Please enter Y or N.
+    goto :launch_dashboard_prompt
+)
+
 exit /b 0
