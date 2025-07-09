@@ -91,8 +91,8 @@ set "log_name=%~2"
 call :log_echo "Executing %notebook_name%..."
 call :log_echo "Converting and executing notebook..."
 
-REM Run Jupyter nbconvert and pipe to Python directly
-jupyter nbconvert --to script --stdout --log-level ERROR %notebook_name% 2>nul | python -u > "..\logs\%log_name%" 2>&1
+REM Run notebook with papermill for progress tracking
+papermill %notebook_name% ..\logs\executed_%notebook_name% --log-output --log-level INFO > "..\logs\%log_name%" 2>&1
 set "exec_result=!ERRORLEVEL!"
 
 REM Display the output to console while it's already saved to log
