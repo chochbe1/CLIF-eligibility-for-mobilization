@@ -21,7 +21,7 @@ The following tables are required:
 
 ## Cohort Identification 
 
-The study period is from March 1, 2020, to March 31, 2022. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters that were intubated for less than 4 hours were excluded. Additionally, encounters that received tracheostomy or were receiving any paralytic drug were considered ineligible to be mobilised for that hour.
+The study period is from January 1, 2018, to December 31, 2024. The cohort consists of patients who were placed on invasive ventilation at any point during their hospitalization within this time period. Encounters that were intubated for less than 4 hours were excluded. Additionally, encounters that received tracheostomy or were receiving any paralytic drug were considered ineligible to be mobilised for that hour.
 
 ## Configuration
 
@@ -32,7 +32,7 @@ The study period is from March 1, 2020, to March 31, 2022. The cohort consists o
 
 ## Environment setup and project execution
 
-The environment setup code is provided in the `setup.sh` file for macOS and `setup.bat` for Windows.
+The environment setup code is provided in the `run_project.sh` file for macOS and `run_project.bat` for Windows.
 
 **For macOS:**
 
@@ -50,10 +50,40 @@ chmod +x run_project.sh
 
 **For Windows:**
 
-1. Run the script:
+1. Run the script in the command prompt:
 ```bat
 run_project.bat
 ```
+
+## Manual Setup and Execution
+
+If you prefer to run the analysis manually, follow these steps:
+
+1. **Setup Python Environment**
+   - Create a virtual environment: `python -m venv .mobilization`
+   - Activate the environment:
+     - Windows: `.mobilization\Scripts\activate`
+     - macOS/Linux: `source .mobilization/bin/activate`
+   - Install dependencies: 
+     ```bash
+     pip install -r requirements.txt
+     pip install jupyter ipykernel papermill
+     ```
+   - Register kernel: `python -m ipykernel install --user --name=.mobilization --display-name="Python (mobilization)"`
+   - Restart your IDE to load the new virtual environment and select the `Python (mobilization)` kernel in the Jupyter notebook.
+
+3. **Run Analysis**
+   Run the following files from the code directory:
+   1. Run the [01_cohort_identification.ipynb](01_cohort_identification.ipynb). Make sure you have all the required tables, variables and elements mentioned at the beginning of the script.
+   2. Run the [02_mobilization_analysis.ipynb](02_mobilization_analysis.ipynb). 
+   3. Run the [03_competing_risk_analysis.R](03_competing_risk_analysis.R). 
+   4. Upload results from [output/final](../output/final/) to the project box folder. 
+
+4. **OPTIONAL: Launch Dashboard**
+   If you want to explore the patient level data for each criteria, checkout this dashboard
+   - Navigate to app directory: `cd ../app`
+   - Start Streamlit server: `streamlit run mobilization_dashboard.py`
+
 
 ## References
 

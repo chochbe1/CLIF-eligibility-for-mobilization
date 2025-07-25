@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 
 def process_resp_support_waterfall(
@@ -9,8 +10,7 @@ def process_resp_support_waterfall(
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
-    Clean + water-fall-fill the CLIF `resp_support` table **exactly** like the
-    Nick's reference R pipeline.
+    Clean + water-fall-fill the CLIF `resp_support` table like Nick's reference R pipeline.
 
     Parameters
     ----------
@@ -40,7 +40,6 @@ def process_resp_support_waterfall(
     -----
     * This function **does not** change timezones; convert before calling
       if needed.
-    * No column re-ordering trick is used (avoids duplicated column error).
     """
 
     p = print if verbose else (lambda *a, **k: None)
@@ -48,7 +47,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 0 – set-up & hourly scaffold                                 #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 0 – initialise & create hourly scaffold")
+    p("✦ Phase 0: initialise & create hourly scaffold")
 
     rs = resp_support.copy()
 
@@ -89,13 +88,17 @@ def process_resp_support_waterfall(
     rs["recorded_hour"] = rs["recorded_dttm"].dt.hour
 
     # Hourly scaffold rows (HH:59:59)
+    print("Creating hourly scaffold for each encounter")
     min_max = (
         rs.groupby(id_col)["recorded_dttm"]
         .agg(["min", "max"])
         .reset_index()
     )
+    
+    # Use tqdm to show progress for scaffold creation
+    tqdm.pandas(desc="Creating hourly scaffolds")
     scaffold = (
-        min_max.apply(
+        min_max.progress_apply(
             lambda r: pd.date_range(
                 r["min"].floor("h"),
                 r["max"].floor("h"),
@@ -125,7 +128,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 1 – heuristics to infer / clean device & mode                #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 1 – heuristic inference of device / mode")
+    p("✦ Phase 1: heuristic inference of device / mode")
 
     # Most-common names (used as fall-back labels)
     device_counts = (
@@ -266,7 +269,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 2 – hierarchical IDs                                         #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 2 – build device / mode hierarchical IDs")
+    p("✦ Phase 2: build device / mode hierarchical IDs")
 
     def change_id(col: pd.Series, by: pd.Series) -> pd.Series:
         return (
@@ -316,7 +319,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 3 – numeric waterfall inside mode_name_id                    #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 3 – numeric down/up-fill inside mode_name_id blocks")
+    p("✦ Phase 3: numeric down/up-fill inside mode_name_id blocks")
 
     # FiO2 default for room-air
     ra_mask = (rs["device_category"] == "room air") & rs["fio2_set"].isna()
@@ -359,9 +362,12 @@ def process_resp_support_waterfall(
         return g[num_cols_fill].ffill().bfill()
         # return g[num_cols_fill].ffill()
 
+    # Add progress tracking for waterfall fill
+    print(f"Applying waterfall fill to {rs[id_col].nunique()} encounters...")
+    tqdm.pandas(desc="Waterfall fill by mode_name_id")
     rs[num_cols_fill] = (
         rs.groupby([id_col, "mode_name_id"], group_keys=False, sort=False)
-        .apply(fill_block)
+        .progress_apply(fill_block)
     )
 
     # “t-piece” rows with blank mode_category → classify as blow-by
@@ -374,7 +380,7 @@ def process_resp_support_waterfall(
     # ------------------------------------------------------------------ #
     # Phase 4 – final tidy-up                                            #
     # ------------------------------------------------------------------ #
-    p("✦ Phase 4 – final deduplication & ordering")
+    p("✦ Phase 4: final deduplication & ordering")
     rs = (
         rs.drop_duplicates()
         .sort_values([id_col, "recorded_dttm"])
@@ -395,5 +401,5 @@ def process_resp_support_waterfall(
     drop_cols = [c for c in drop_cols if c in rs.columns]
     rs = rs.drop(columns=drop_cols)
 
-    p("✅ Respiratory-support waterfall complete.")
+    p("[OK] Respiratory-support waterfall complete.")
     return rs

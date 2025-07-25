@@ -4,6 +4,8 @@ self-contained module to compute SOFA-97 in the specified window (start_dttm and
 Author: Kaveri Chhikara
 Date: April 20, 2025
 
+To-do-- add check that required columns exist in the input DataFrame
+
 Usage
 -----
 from sofa_score import compute_sofa
@@ -38,7 +40,7 @@ logger.setLevel(logging.INFO)
 # Outlier config file
 ##############################################################################
 
-with open('../config/outlier_config.json', 'r') as f:
+with open('../config/outlier_config.json', 'r', encoding='utf-8') as f:
     outlier_cfg = json.load(f)
 
 
